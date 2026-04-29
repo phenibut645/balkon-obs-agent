@@ -15,6 +15,10 @@ function normalizeBoolean(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
+function normalizeLanguage(value: unknown, fallback: "en" | "ru" | "et"): "en" | "ru" | "et" {
+  return value === "en" || value === "ru" || value === "et" ? value : fallback;
+}
+
 export class ConfigStore {
   private readonly filePath: string;
 
@@ -63,6 +67,7 @@ export class ConfigStore {
       startMinimizedToTray: normalizeBoolean(s.startMinimizedToTray, DEFAULT_SETTINGS.startMinimizedToTray),
       autoConnectOnLaunch: normalizeBoolean(s.autoConnectOnLaunch, DEFAULT_SETTINGS.autoConnectOnLaunch),
       autoRetryObs: normalizeBoolean(s.autoRetryObs, DEFAULT_SETTINGS.autoRetryObs),
+      language: normalizeLanguage(s.language, DEFAULT_SETTINGS.language),
     };
   }
 

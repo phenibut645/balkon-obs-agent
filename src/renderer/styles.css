@@ -12,166 +12,231 @@
 
 body {
   margin: 0;
-  min-width: 640px;
+  min-width: 800px;
   min-height: 100vh;
-  background:
-    linear-gradient(180deg, rgba(238, 242, 245, 0.96), rgba(236, 241, 238, 0.96)),
-    #eef2f5;
+  background: linear-gradient(180deg, rgba(238, 242, 245, 0.96), rgba(236, 241, 238, 0.96)), #eef2f5;
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
+/* ============================================================================
+ * App Layout
+ * ============================================================================ */
+
 .app-shell {
   min-height: 100vh;
-  padding: 28px;
-}
-
-.workspace {
-  max-width: 1060px;
+  padding: 24px;
+  max-width: 1000px;
   margin: 0 auto;
 }
 
+/* ============================================================================
+ * Header
+ * ============================================================================ */
+
 .app-header {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 10px 0 26px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #d5dce0;
+  margin-bottom: 24px;
 }
 
-.eyebrow {
-  margin: 0 0 6px;
-  color: #69727d;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-h1 {
-  margin: 0;
-  color: #17212b;
-  font-size: 2rem;
-  line-height: 1.1;
-  letter-spacing: 0;
-}
-
-.title-row {
+.header-title-section {
   display: flex;
   align-items: baseline;
-  flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
 }
 
-.title-version {
-  color: #69727d;
-  font-size: 0.88rem;
-  font-weight: 800;
-}
-
-h2 {
+.header-title-section h1 {
   margin: 0;
-  font-size: 1rem;
-  line-height: 1.2;
-  letter-spacing: 0;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
 }
 
-.connection-pills {
+.app-version {
+  display: inline-block;
+  padding: 4px 8px;
+  background: #f0f3f6;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #5a6672;
+  font-weight: 600;
+}
+
+.header-status-section {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
+  gap: 12px;
+  align-items: center;
 }
 
 .status-pill {
   display: inline-flex;
-  min-height: 34px;
   align-items: center;
-  border: 1px solid #cbd3d9;
-  border-radius: 999px;
-  padding: 6px 12px;
-  background: #ffffff;
-  color: #3e4c59;
-  font-size: 0.85rem;
-  font-weight: 700;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
 .status-pill[data-status="connected"] {
-  border-color: #2f9e75;
-  color: #116149;
-  background: #e4f7ee;
+  background: #d4edda;
+  color: #155724;
 }
 
 .status-pill[data-status="connecting"] {
-  border-color: #c8912c;
-  color: #7c5512;
-  background: #fff3d6;
+  background: #fff3cd;
+  color: #856404;
 }
 
+.status-pill[data-status="waiting"] {
+  background: #e2e3e5;
+  color: #383d41;
+}
+
+.status-pill[data-status="disconnected"],
 .status-pill[data-status="error"] {
-  border-color: #d86969;
-  color: #a62c2c;
-  background: #ffe8e8;
+  background: #f8d7da;
+  color: #721c24;
 }
 
-.config-grid,
-.status-grid,
-.updates-panel,
-.log-section {
+.status-label {
+  font-weight: 700;
+  opacity: 0.75;
+}
+
+.status-value {
+  font-family: "Courier New", monospace;
+  font-size: 12px;
+}
+
+/* ============================================================================
+ * Tab Navigation
+ * ============================================================================ */
+
+.tab-nav {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid #d5dce0;
+  margin-bottom: 24px;
+  padding: 0;
+}
+
+.tab-button {
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: #5a6672;
+  margin-bottom: -2px;
+  transition: all 0.2s ease;
+}
+
+.tab-button:hover:not(:disabled) {
+  color: #1f2933;
+}
+
+.tab-button.active {
+  color: #287d5c;
+  border-bottom-color: #287d5c;
+}
+
+.tab-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+ * Tab Panels
+ * ============================================================================ */
+
+.tab-panels {
+  display: contents;
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
+}
+
+/* ============================================================================
+ * Forms & Fields
+ * ============================================================================ */
+
+.form-card {
+  background: #f7f9fa;
   border: 1px solid #ccd2d8;
   border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 10px 28px rgba(31, 41, 51, 0.08);
+  padding: 16px;
+  margin-bottom: 20px;
 }
 
 .config-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-  padding: 22px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  border: none;
 }
 
-.field {
-  display: grid;
-  gap: 7px;
-  min-width: 0;
+.form-legend {
+  grid-column: 1;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #5a6672;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: block;
 }
 
-.field-wide {
+.config-grid input[type="text"],
+.config-grid input[type="password"] {
   grid-column: 1 / -1;
-}
-
-.field span {
-  color: #52606d;
-  font-size: 0.86rem;
-  font-weight: 700;
-}
-
-input {
-  width: 100%;
-  min-height: 42px;
-  border: 1px solid #b8c0c8;
+  padding: 10px 12px;
+  border: 1px solid #b5bcc4;
   border-radius: 6px;
-  padding: 9px 11px;
-  color: #17212b;
-  background: #fbfcfd;
-  outline: none;
+  background: #ffffff;
+  color: #1f2933;
+  font-size: 14px;
 }
 
-input:focus {
-  border-color: #2779bd;
-  box-shadow: 0 0 0 3px rgba(39, 121, 189, 0.16);
+.config-grid input::placeholder {
+  color: #8f9ba3;
 }
+
+.config-grid input:focus {
+  outline: none;
+  border-color: #287d5c;
+  box-shadow: 0 0 0 2px rgba(40, 125, 92, 0.1);
+}
+
+/* ============================================================================
+ * Buttons
+ * ============================================================================ */
 
 .button-row {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  padding-top: 2px;
+  margin-top: 16px;
 }
 
 button {
@@ -183,6 +248,7 @@ button {
   background: #f7f9fa;
   font-weight: 800;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 button:hover:not(:disabled) {
@@ -193,6 +259,10 @@ button:hover:not(:disabled) {
 button:disabled {
   cursor: wait;
   opacity: 0.65;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 #connect-button {
@@ -217,34 +287,162 @@ button:disabled {
   background: #9e3434;
 }
 
-.behavior-panel {
-  margin-top: 18px;
-  padding: 14px 16px;
-  background: #f7f9fa;
-  border: 1px solid #ccd2d8;
+#check-updates-button,
+#install-update-button {
+  white-space: nowrap;
+}
+
+/* ============================================================================
+ * Status Grid (Main Tab)
+ * ============================================================================ */
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin-bottom: 20px;
+  overflow: hidden;
+  background: #ccd2d8;
   border-radius: 8px;
 }
 
-.behavior-title {
-  margin: 0 0 12px;
-  font-size: 0.9rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #5a6672;
+.status-line {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  background: #f7f9fa;
 }
 
-.behavior-grid {
+.status-line:first-child {
+  border-top-left-radius: 7px;
+}
+
+.status-line:nth-child(3n) {
+  border-top-right-radius: 7px;
+}
+
+.status-line strong {
+  font-weight: 600;
+  font-size: 12px;
+  color: #5a6672;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.status-line span {
+  font-family: "Courier New", monospace;
+  font-size: 13px;
+  color: #1f2933;
+  word-break: break-word;
+}
+
+/* ============================================================================
+ * Log Section
+ * ============================================================================ */
+
+.log-section {
+  background: #f7f9fa;
+  border: 1px solid #ccd2d8;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.log-header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1f2933;
+}
+
+.log-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.log-entry {
+  display: flex;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #e5e9ed;
+  font-size: 12px;
+  align-items: flex-start;
+}
+
+.log-entry:last-child {
+  border-bottom: none;
+}
+
+.log-entry time {
+  flex-shrink: 0;
+  min-width: 60px;
+  color: #8f9ba3;
+  font-family: "Courier New", monospace;
+}
+
+.log-entry span {
+  flex: 1;
+  color: #1f2933;
+  word-break: break-word;
+}
+
+.log-entry.log-success span {
+  color: #155724;
+}
+
+.log-entry.log-error span {
+  color: #721c24;
+}
+
+.log-entry.log-warn span {
+  color: #856404;
+}
+
+.log-entry.log-info span {
+  color: #004085;
+}
+
+/* ============================================================================
+ * Settings Tab
+ * ============================================================================ */
+
+.settings-section {
+  background: #f7f9fa;
+  border: 1px solid #ccd2d8;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.settings-section-title {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1f2933;
+}
+
+.checkbox-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 20px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px 20px;
 }
 
 .checkbox-field {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.9rem;
+  font-size: 13px;
   cursor: pointer;
   user-select: none;
 }
@@ -257,196 +455,183 @@ button:disabled {
   accent-color: #287d5c;
 }
 
-.status-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1px;
-  margin-top: 18px;
-  overflow: hidden;
-  background: #ccd2d8;
+.language-select-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.status-line {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-  padding: 16px;
+.language-select-wrapper label {
+  font-weight: 600;
+  font-size: 13px;
+  color: #1f2933;
+}
+
+.language-select {
+  padding: 8px 12px;
+  border: 1px solid #b5bcc4;
+  border-radius: 6px;
   background: #ffffff;
+  color: #1f2933;
+  font-size: 14px;
+  cursor: pointer;
+  min-width: 150px;
 }
 
-.status-line span {
-  color: #69727d;
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.status-line strong {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: #17212b;
-  font-size: 1rem;
-  letter-spacing: 0;
-}
-
-.status-error strong {
-  color: #9e3434;
+.language-select:focus {
+  outline: none;
+  border-color: #287d5c;
+  box-shadow: 0 0 0 2px rgba(40, 125, 92, 0.1);
 }
 
 .updates-panel {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  margin-top: 18px;
-  padding: 15px 16px;
-}
-
-.updates-copy {
   display: grid;
-  gap: 5px;
-  min-width: 0;
+  gap: 12px;
 }
 
-.updates-copy span {
-  color: #52606d;
-  font-size: 0.86rem;
+.update-version,
+.update-status {
+  font-size: 13px;
+  color: #1f2933;
+}
+
+.update-version strong,
+.update-status strong {
   font-weight: 700;
 }
 
-.updates-copy p {
+.update-status {
+  padding: 8px 12px;
+  background: #ffffff;
+  border: 1px solid #ccd2d8;
+  border-radius: 4px;
+}
+
+.update-status[data-status="available"] {
+  background: #d4edda;
+  border-color: #c3e6cb;
+  color: #155724;
+}
+
+.update-status[data-status="error"] {
+  background: #f8d7da;
+  border-color: #f5c6cb;
+  color: #721c24;
+}
+
+.update-buttons {
+  justify-content: flex-start;
+}
+
+.settings-info {
+  background: #f7f9fa;
+  border: 1px solid #ccd2d8;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #5a6672;
+  line-height: 1.5;
+}
+
+.settings-info p {
   margin: 0;
-  overflow-wrap: anywhere;
-  color: #17212b;
 }
 
-.updates-copy p[data-status="downloaded"] {
-  color: #116149;
-  font-weight: 800;
+/* ============================================================================
+ * Changelog Tab
+ * ============================================================================ */
+
+.changelog-section {
+  background: #f7f9fa;
+  border: 1px solid #ccd2d8;
+  border-radius: 8px;
+  padding: 16px;
 }
 
-.updates-copy p[data-status="error"] {
-  color: #9e3434;
-  font-weight: 800;
+.changelog-section h2 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2933;
 }
 
-.updates-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-#install-update-button {
-  border-color: #287d5c;
-  color: #ffffff;
-  background: #287d5c;
-}
-
-#install-update-button:hover:not(:disabled) {
-  border-color: #1f674b;
-  background: #1f674b;
-}
-
-.log-section {
-  margin-top: 18px;
-  overflow: hidden;
-}
-
-.log-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  border-bottom: 1px solid #dce1e6;
-  padding: 14px 16px;
-}
-
-.log-header button {
-  min-height: 34px;
-  padding: 5px 11px;
-}
-
-.log-list {
+.changelog-list {
   display: flex;
   flex-direction: column;
-  gap: 0;
-  height: 230px;
+  gap: 16px;
+}
+
+.changelog-entry {
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e9ed;
+}
+
+.changelog-entry:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.changelog-version {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #287d5c;
+  font-family: "Courier New", monospace;
+}
+
+.changelog-changes {
   margin: 0;
-  padding: 0;
-  overflow-y: auto;
-  list-style: none;
-  background: #17212b;
+  padding: 0 0 0 20px;
+  list-style: disc;
+  color: #1f2933;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
-.log-entry {
-  display: grid;
-  grid-template-columns: 86px minmax(0, 1fr);
-  gap: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 9px 14px;
-  color: #e8edf0;
-  font-size: 0.88rem;
+.changelog-changes li {
+  margin-bottom: 4px;
 }
 
-.log-entry time {
-  color: #aab4bf;
-  font-variant-numeric: tabular-nums;
+.changelog-changes li:last-child {
+  margin-bottom: 0;
 }
 
-.log-entry span {
-  overflow-wrap: anywhere;
-}
+/* ============================================================================
+ * Responsive Design
+ * ============================================================================ */
 
-.log-success span {
-  color: #9ae6bf;
-}
-
-.log-warn span {
-  color: #f7c86a;
-}
-
-.log-error span {
-  color: #ffaaa5;
-}
-
-@media (max-width: 760px) {
-  body {
-    min-width: 0;
-  }
-
+@media (max-width: 768px) {
   .app-shell {
-    padding: 18px;
+    min-width: auto;
+    padding: 16px;
   }
 
   .app-header {
-    align-items: flex-start;
     flex-direction: column;
+    align-items: flex-start;
   }
 
-  .connection-pills {
-    justify-content: flex-start;
+  .header-status-section {
+    width: 100%;
   }
 
-  .config-grid,
-  .status-grid {
+  .config-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .checkbox-grid {
     grid-template-columns: 1fr;
   }
 
   .status-grid {
-    gap: 1px;
+    grid-template-columns: 1fr;
   }
 
-  .updates-panel {
-    align-items: flex-start;
+  .button-row {
     flex-direction: column;
   }
 
-  .updates-actions {
-    justify-content: flex-start;
-  }
-
-  .log-entry {
-    grid-template-columns: 74px minmax(0, 1fr);
+  button {
+    width: 100%;
   }
 }

@@ -127,6 +127,24 @@ Click `Save`, then `Connect`.
 - Do not commit real Agent Tokens.
 - The app masks token/password inputs and does not print the full Agent Token in logs.
 
+## UI Tabs and Localization
+
+Balkon OBS Agent features a tabbed user interface with language support.
+
+### Tabs
+
+- **Main** — Connection settings, relay and OBS status, live event log
+- **Settings** — Behavior options, language selection, application updates
+- **Changelog** — Application release history and new features
+
+### Languages Supported
+
+- English
+- Русский (Russian)
+- Eesti (Estonian)
+
+Language selection is saved locally and applied immediately without requiring an app restart.
+
 ## Background / Tray Mode
 
 Balkon OBS Agent runs as a system-tray application. When you close the window the app keeps running in the background. Right-click the tray icon to control it.

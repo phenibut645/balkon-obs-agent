@@ -75,6 +75,7 @@ export interface AgentSettings {
   startMinimizedToTray: boolean;
   autoConnectOnLaunch: boolean;
   autoRetryObs: boolean;
+  language: "en" | "ru" | "et";
 }
 
 export const DEFAULT_SETTINGS: AgentSettings = {
@@ -82,6 +83,7 @@ export const DEFAULT_SETTINGS: AgentSettings = {
   startMinimizedToTray: false,
   autoConnectOnLaunch: false,
   autoRetryObs: true,
+  language: "en",
 };
 
 export type ObsRelayCommandName =

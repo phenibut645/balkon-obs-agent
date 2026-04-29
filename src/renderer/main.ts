@@ -1,5 +1,23 @@
 import "./styles.css";
 import { AgentConfig, AgentSettings, AgentState, DEFAULT_CONFIG, DEFAULT_SETTINGS, LogEntry, UpdateState } from "../shared/types";
+import { CHANGELOG } from "../shared/changelog";
+import { t, setLanguage, getLanguage } from "./i18n";
+
+// ============================================================================
+// DOM Elements - Tabs
+// ============================================================================
+
+const tabMain = document.querySelector<HTMLButtonElement>("#tab-main");
+const tabSettings = document.querySelector<HTMLButtonElement>("#tab-settings");
+const tabChangelog = document.querySelector<HTMLButtonElement>("#tab-changelog");
+
+const panelMain = document.querySelector<HTMLElement>("#panel-main");
+const panelSettings = document.querySelector<HTMLElement>("#panel-settings");
+const panelChangelog = document.querySelector<HTMLElement>("#panel-changelog");
+
+// ============================================================================
+// DOM Elements - Main Tab
+// ============================================================================
 
 const form = document.querySelector<HTMLFormElement>("#config-form");
 const relayUrlInput = document.querySelector<HTMLInputElement>("#relay-url");
@@ -11,26 +29,52 @@ const saveButton = document.querySelector<HTMLButtonElement>("#save-button");
 const connectButton = document.querySelector<HTMLButtonElement>("#connect-button");
 const disconnectButton = document.querySelector<HTMLButtonElement>("#disconnect-button");
 const testObsButton = document.querySelector<HTMLButtonElement>("#test-obs-button");
-const checkUpdatesButton = document.querySelector<HTMLButtonElement>("#check-updates-button");
-const installUpdateButton = document.querySelector<HTMLButtonElement>("#install-update-button");
-const clearLogButton = document.querySelector<HTMLButtonElement>("#clear-log-button");
 const relayStatus = document.querySelector<HTMLElement>("#relay-status");
 const obsStatus = document.querySelector<HTMLElement>("#obs-status");
 const lastError = document.querySelector<HTMLElement>("#last-error");
-const titleVersion = document.querySelector<HTMLElement>("#title-version");
-const currentVersion = document.querySelector<HTMLElement>("#current-version");
-const updateStatus = document.querySelector<HTMLElement>("#update-status");
-const relayPill = document.querySelector<HTMLElement>("#relay-pill");
-const obsPill = document.querySelector<HTMLElement>("#obs-pill");
+const clearLogButton = document.querySelector<HTMLButtonElement>("#clear-log-button");
 const logList = document.querySelector<HTMLOListElement>("#log-list");
 
-// Behavior settings checkboxes
+// ============================================================================
+// DOM Elements - Settings Tab
+// ============================================================================
+
 const startWithWindowsCheck = document.querySelector<HTMLInputElement>("#start-with-windows");
 const startMinimizedCheck = document.querySelector<HTMLInputElement>("#start-minimized");
 const autoConnectCheck = document.querySelector<HTMLInputElement>("#auto-connect");
 const autoRetryObsCheck = document.querySelector<HTMLInputElement>("#auto-retry-obs");
+const languageSelect = document.querySelector<HTMLSelectElement>("#language-select");
+const checkUpdatesButton = document.querySelector<HTMLButtonElement>("#check-updates-button");
+const installUpdateButton = document.querySelector<HTMLButtonElement>("#install-update-button");
+const updateStatus = document.querySelector<HTMLElement>("#update-status");
+const currentVersion = document.querySelector<HTMLElement>("#current-version");
+
+// ============================================================================
+// DOM Elements - Header
+// ============================================================================
+
+const relayPill = document.querySelector<HTMLElement>("#relay-pill");
+const obsPill = document.querySelector<HTMLElement>("#obs-pill");
+const relayPillStatus = document.querySelector<HTMLElement>("#relay-pill-status");
+const obsPillStatus = document.querySelector<HTMLElement>("#obs-pill-status");
+
+// ============================================================================
+// DOM Elements - Changelog
+// ============================================================================
+
+const changelogList = document.querySelector<HTMLElement>("#changelog-list");
+
+// ============================================================================
+// Validation
+// ============================================================================
 
 const requiredElements = [
+  tabMain,
+  tabSettings,
+  tabChangelog,
+  panelMain,
+  panelSettings,
+  panelChangelog,
   form,
   relayUrlInput,
   agentIdInput,
@@ -41,27 +85,68 @@ const requiredElements = [
   connectButton,
   disconnectButton,
   testObsButton,
-  checkUpdatesButton,
-  installUpdateButton,
-  clearLogButton,
   relayStatus,
   obsStatus,
   lastError,
-  titleVersion,
-  currentVersion,
-  updateStatus,
-  relayPill,
-  obsPill,
+  clearLogButton,
   logList,
   startWithWindowsCheck,
   startMinimizedCheck,
   autoConnectCheck,
   autoRetryObsCheck,
+  languageSelect,
+  checkUpdatesButton,
+  installUpdateButton,
+  updateStatus,
+  currentVersion,
+  relayPill,
+  obsPill,
+  changelogList,
 ];
 
 if (requiredElements.some(element => !element)) {
   throw new Error("Balkon OBS Agent UI failed to initialize.");
 }
+
+// ============================================================================
+// UI State
+// ============================================================================
+
+let currentTab: "main" | "settings" | "changelog" = "main";
+
+// ============================================================================
+// Tab Management
+// ============================================================================
+
+function switchTab(tab: "main" | "settings" | "changelog"): void {
+  if (currentTab === tab) return;
+
+  const tabs = [
+    { tab: "main", button: tabMain!, panel: panelMain! },
+    { tab: "settings", button: tabSettings!, panel: panelSettings! },
+    { tab: "changelog", button: tabChangelog!, panel: panelChangelog! },
+  ];
+
+  for (const t of tabs) {
+    t.button.classList.toggle("active", t.tab === tab);
+    t.button.setAttribute("aria-selected", t.tab === tab ? "true" : "false");
+    t.panel.classList.toggle("active", t.tab === tab);
+  }
+
+  currentTab = tab;
+}
+
+// ============================================================================
+// Tab Event Listeners
+// ============================================================================
+
+tabMain!.addEventListener("click", () => switchTab("main"));
+tabSettings!.addEventListener("click", () => switchTab("settings"));
+tabChangelog!.addEventListener("click", () => switchTab("changelog"));
+
+// ============================================================================
+// Form Helpers
+// ============================================================================
 
 function readForm(): AgentConfig {
   return {
@@ -87,6 +172,7 @@ function readSettings(): AgentSettings {
     startMinimizedToTray: startMinimizedCheck!.checked,
     autoConnectOnLaunch: autoConnectCheck!.checked,
     autoRetryObs: autoRetryObsCheck!.checked,
+    language: (languageSelect!.value as "en" | "ru" | "et") || DEFAULT_SETTINGS.language,
   };
 }
 
@@ -95,6 +181,7 @@ function writeSettings(settings: AgentSettings): void {
   startMinimizedCheck!.checked = settings.startMinimizedToTray;
   autoConnectCheck!.checked = settings.autoConnectOnLaunch;
   autoRetryObsCheck!.checked = settings.autoRetryObs;
+  languageSelect!.value = settings.language;
 }
 
 function setBusy(isBusy: boolean): void {
@@ -104,22 +191,46 @@ function setBusy(isBusy: boolean): void {
   testObsButton!.disabled = isBusy;
 }
 
+// ============================================================================
+// Localization Helpers
+// ============================================================================
+
+function updateTranslations(): void {
+  document.querySelectorAll<HTMLElement>("[data-i18n]").forEach(el => {
+    const key = el.getAttribute("data-i18n");
+    if (key) {
+      el.textContent = t(key);
+    }
+  });
+}
+
+function applyLanguage(lang: "en" | "ru" | "et"): void {
+  setLanguage(lang);
+  updateTranslations();
+}
+
+// ============================================================================
+// Render Functions
+// ============================================================================
+
 function renderState(state: AgentState): void {
   relayStatus!.textContent = state.relayStatus;
   obsStatus!.textContent = state.obsStatus;
-  lastError!.textContent = state.lastError || "None";
+  lastError!.textContent = state.lastError || t("error_none");
 
-  relayPill!.textContent = `Relay ${state.relayStatus}`;
+  relayPillStatus!.textContent = state.relayStatus;
+  obsPillStatus!.textContent = state.obsStatus;
   relayPill!.dataset.status = state.relayStatus;
-  obsPill!.textContent = `OBS ${state.obsStatus}`;
   obsPill!.dataset.status = state.obsStatus;
 }
 
 function renderUpdateState(state: UpdateState): void {
-  titleVersion!.textContent = `v${state.currentVersion}`;
   currentVersion!.textContent = state.currentVersion;
   updateStatus!.textContent = state.message;
-  updateStatus!.dataset.status = state.status;
+  const statusDisplay = updateStatus!.parentElement;
+  if (statusDisplay) {
+    statusDisplay.dataset.status = state.status;
+  }
   installUpdateButton!.hidden = state.status !== "downloaded";
   checkUpdatesButton!.disabled = state.status === "checking" || state.status === "downloading" || state.status === "disabled";
 }
@@ -147,6 +258,34 @@ function addLog(entry: LogEntry): void {
   }
 }
 
+function renderChangelog(): void {
+  changelogList!.replaceChildren();
+  for (const entry of CHANGELOG) {
+    const versionDiv = document.createElement("div");
+    versionDiv.className = "changelog-entry";
+
+    const versionTitle = document.createElement("h3");
+    versionTitle.className = "changelog-version";
+    versionTitle.textContent = `v${entry.version}`;
+
+    const changesList = document.createElement("ul");
+    changesList.className = "changelog-changes";
+
+    for (const change of entry.changes) {
+      const li = document.createElement("li");
+      li.textContent = change;
+      changesList.appendChild(li);
+    }
+
+    versionDiv.append(versionTitle, changesList);
+    changelogList!.appendChild(versionDiv);
+  }
+}
+
+// ============================================================================
+// Form Events
+// ============================================================================
+
 async function saveConfig(): Promise<void> {
   const saved = await window.balkonAgent.saveConfig(readForm());
   writeForm(saved);
@@ -155,10 +294,6 @@ async function saveConfig(): Promise<void> {
     level: "success",
     message: "Configuration saved.",
   });
-}
-
-async function saveSettings(): Promise<void> {
-  await window.balkonAgent.saveSettings(readSettings());
 }
 
 form!.addEventListener("submit", event => {
@@ -177,11 +312,19 @@ form!.addEventListener("submit", event => {
 
 for (const checkbox of [startWithWindowsCheck!, startMinimizedCheck!, autoConnectCheck!, autoRetryObsCheck!]) {
   checkbox.addEventListener("change", () => {
-    saveSettings().catch(() => {
+    window.balkonAgent.saveSettings(readSettings()).catch(() => {
       // Non-critical, ignore
     });
   });
 }
+
+languageSelect!.addEventListener("change", () => {
+  const settings = readSettings();
+  applyLanguage(settings.language);
+  window.balkonAgent.saveSettings(settings).catch(() => {
+    // Non-critical, ignore
+  });
+});
 
 connectButton!.addEventListener("click", () => {
   setBusy(true);
@@ -247,7 +390,7 @@ checkUpdatesButton!.addEventListener("click", () => {
       });
     })
     .finally(() => {
-      if (updateStatus!.dataset.status !== "checking" && updateStatus!.dataset.status !== "downloading") {
+      if (updateStatus!.parentElement?.dataset.status !== "checking" && updateStatus!.parentElement?.dataset.status !== "downloading") {
         checkUpdatesButton!.disabled = false;
       }
     });
@@ -267,7 +410,10 @@ installUpdateButton!.addEventListener("click", () => {
     });
 });
 
-// Tray actions forwarded from main process (connect/disconnect triggered from tray menu)
+// ============================================================================
+// Tray Actions
+// ============================================================================
+
 window.balkonAgent.onTrayAction(action => {
   if (action === "connect") {
     window.balkonAgent.connect(readForm())
@@ -280,14 +426,47 @@ window.balkonAgent.onTrayAction(action => {
   }
 });
 
+// ============================================================================
+// State Subscriptions
+// ============================================================================
+
 window.balkonAgent.onStateChange(renderState);
 window.balkonAgent.onLog(addLog);
 window.balkonAgent.onUpdateState(renderUpdateState);
 
-window.balkonAgent.loadConfig()
-  .then(writeForm)
-  .catch(() => writeForm(DEFAULT_CONFIG));
+// ============================================================================
+// Initialization
+// ============================================================================
 
-window.balkonAgent.loadSettings()
-  .then(writeSettings)
-  .catch(() => writeSettings(DEFAULT_SETTINGS));
+async function initializeApp(): Promise<void> {
+  // Load config
+  try {
+    const config = await window.balkonAgent.loadConfig();
+    writeForm(config);
+  } catch {
+    writeForm(DEFAULT_CONFIG);
+  }
+
+  // Load settings and apply language
+  try {
+    const settings = await window.balkonAgent.loadSettings();
+    writeSettings(settings);
+    applyLanguage(settings.language);
+  } catch {
+    writeSettings(DEFAULT_SETTINGS);
+    applyLanguage(DEFAULT_SETTINGS.language);
+  }
+
+  // Render changelog
+  renderChangelog();
+
+  // Apply initial translations
+  updateTranslations();
+}
+
+initializeApp().catch(error => {
+  console.error("Failed to initialize app:", error);
+  writeForm(DEFAULT_CONFIG);
+  writeSettings(DEFAULT_SETTINGS);
+  applyLanguage(DEFAULT_SETTINGS.language);
+});

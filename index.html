@@ -3,116 +3,172 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Balkon OBS Agent</title>
+    <title id="page-title">Balkon OBS Agent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet" />
   </head>
   <body>
-    <main id="app" class="app-shell">
-      <section class="workspace" aria-labelledby="app-title">
-        <header class="app-header">
-          <div>
-            <p class="eyebrow">Streamer desktop bridge</p>
-            <div class="title-row">
-              <h1 id="app-title">Balkon OBS Agent</h1>
-              <span id="title-version" class="title-version">v0.0.0</span>
+    <div id="app" class="app-shell">
+      <!-- Header -->
+      <header class="app-header">
+        <div class="header-title-section">
+          <h1 id="app-title">Balkon OBS Agent</h1>
+          <span id="app-version" class="app-version">Version 0.1.6</span>
+        </div>
+        <div class="header-status-section">
+          <span id="relay-pill" class="status-pill" data-status="disconnected">
+            <span class="status-label" id="relay-pill-label">Relay</span>
+            <span class="status-value" id="relay-pill-status">disconnected</span>
+          </span>
+          <span id="obs-pill" class="status-pill" data-status="disconnected">
+            <span class="status-label" id="obs-pill-label">OBS</span>
+            <span class="status-value" id="obs-pill-status">disconnected</span>
+          </span>
+        </div>
+      </header>
+
+      <!-- Tab Navigation -->
+      <nav class="tab-nav" role="tablist">
+        <button id="tab-main" class="tab-button active" role="tab" aria-selected="true" aria-controls="panel-main" data-tab="main">
+          <span data-i18n="tab_main">Main</span>
+        </button>
+        <button id="tab-settings" class="tab-button" role="tab" aria-selected="false" aria-controls="panel-settings" data-tab="settings">
+          <span data-i18n="tab_settings">Settings</span>
+        </button>
+        <button id="tab-changelog" class="tab-button" role="tab" aria-selected="false" aria-controls="panel-changelog" data-tab="changelog">
+          <span data-i18n="tab_changelog">Changelog</span>
+        </button>
+      </nav>
+
+      <!-- Tab Panels -->
+      <main class="tab-panels">
+        <!-- Main Tab -->
+        <section id="panel-main" class="tab-panel active" role="tabpanel" aria-labelledby="tab-main">
+          <form id="config-form" class="form-card">
+            <fieldset class="config-grid">
+              <legend class="form-legend" data-i18n="relay_url">Relay URL</legend>
+              <input id="relay-url" type="text" placeholder="wss://..." required />
+
+              <legend class="form-legend" data-i18n="agent_id">Agent ID</legend>
+              <input id="agent-id" type="text" placeholder="" required />
+
+              <legend class="form-legend" data-i18n="agent_token">Agent Token</legend>
+              <input id="agent-token" type="password" placeholder="" required />
+
+              <legend class="form-legend" data-i18n="obs_url">OBS WebSocket URL</legend>
+              <input id="obs-url" type="text" placeholder="ws://127.0.0.1:4455" required />
+
+              <legend class="form-legend" data-i18n="obs_password">OBS WebSocket Password</legend>
+              <input id="obs-password" type="password" placeholder="" />
+            </fieldset>
+
+            <div class="button-row" role="group" aria-label="Agent controls">
+              <button id="save-button" type="submit" data-i18n="save">Save</button>
+              <button id="connect-button" type="button" data-i18n="connect">Connect</button>
+              <button id="disconnect-button" type="button" data-i18n="disconnect">Disconnect</button>
+              <button id="test-obs-button" type="button" data-i18n="test_obs">Test OBS</button>
+            </div>
+          </form>
+
+          <div class="status-grid">
+            <div class="status-line">
+              <strong data-i18n="relay_status">Relay</strong>
+              <span id="relay-status">disconnected</span>
+            </div>
+            <div class="status-line">
+              <strong data-i18n="obs_status">OBS</strong>
+              <span id="obs-status">disconnected</span>
+            </div>
+            <div class="status-line">
+              <strong data-i18n="last_error">Last error</strong>
+              <span id="last-error" data-i18n="error_none">None</span>
             </div>
           </div>
-          <div class="connection-pills" aria-label="Connection status">
-            <span id="relay-pill" class="status-pill" data-status="disconnected">Relay disconnected</span>
-            <span id="obs-pill" class="status-pill" data-status="disconnected">OBS disconnected</span>
+
+          <section class="log-section" aria-label="Event log">
+            <div class="log-header">
+              <h2 data-i18n="recent_events">Recent Events</h2>
+              <button id="clear-log-button" type="button" data-i18n="clear">Clear</button>
+            </div>
+            <ol id="log-list" class="log-list"></ol>
+          </section>
+        </section>
+
+        <!-- Settings Tab -->
+        <section id="panel-settings" class="tab-panel" role="tabpanel" aria-labelledby="tab-settings">
+          <!-- Behavior Settings -->
+          <div class="settings-section">
+            <h2 class="settings-section-title" data-i18n="behavior">Behavior</h2>
+            <div class="checkbox-grid">
+              <label class="checkbox-field">
+                <input id="start-with-windows" type="checkbox" />
+                <span data-i18n="start_with_windows">Start with Windows</span>
+              </label>
+              <label class="checkbox-field">
+                <input id="start-minimized" type="checkbox" />
+                <span data-i18n="start_minimized">Start minimized to tray</span>
+              </label>
+              <label class="checkbox-field">
+                <input id="auto-connect" type="checkbox" />
+                <span data-i18n="auto_connect">Auto-connect on launch</span>
+              </label>
+              <label class="checkbox-field">
+                <input id="auto-retry-obs" type="checkbox" />
+                <span data-i18n="auto_retry_obs">Auto-retry OBS connection</span>
+              </label>
+            </div>
           </div>
-        </header>
 
-        <form id="config-form" class="config-grid">
-          <label class="field field-wide">
-            <span>Relay URL</span>
-            <input id="relay-url" name="relayUrl" type="text" inputmode="url" autocomplete="off" spellcheck="false" />
-          </label>
-
-          <label class="field">
-            <span>Agent ID</span>
-            <input id="agent-id" name="agentId" type="text" autocomplete="off" spellcheck="false" />
-          </label>
-
-          <label class="field">
-            <span>Agent Token</span>
-            <input id="agent-token" name="agentToken" type="password" autocomplete="off" spellcheck="false" />
-          </label>
-
-          <label class="field">
-            <span>OBS WebSocket URL</span>
-            <input id="obs-url" name="obsUrl" type="text" inputmode="url" autocomplete="off" spellcheck="false" />
-          </label>
-
-          <label class="field">
-            <span>OBS WebSocket Password</span>
-            <input id="obs-password" name="obsPassword" type="password" autocomplete="off" spellcheck="false" />
-          </label>
-
-          <div class="button-row field-wide" role="group" aria-label="Agent controls">
-            <button id="save-button" type="submit">Save</button>
-            <button id="connect-button" type="button">Connect</button>
-            <button id="disconnect-button" type="button">Disconnect</button>
-            <button id="test-obs-button" type="button">Test OBS</button>
+          <!-- Language Selection -->
+          <div class="settings-section">
+            <h2 class="settings-section-title" data-i18n="language">Language</h2>
+            <div class="language-select-wrapper">
+              <label for="language-select">
+                <span data-i18n="language">Language</span>:
+              </label>
+              <select id="language-select" class="language-select">
+                <option value="en" data-i18n="language_en">English</option>
+                <option value="ru" data-i18n="language_ru">Русский</option>
+                <option value="et" data-i18n="language_et">Eesti</option>
+              </select>
+            </div>
           </div>
-        </form>
 
-        <section class="behavior-panel" aria-label="Behavior settings">
-          <h2 class="behavior-title">Behavior</h2>
-          <div class="behavior-grid">
-            <label class="checkbox-field">
-              <input id="start-with-windows" type="checkbox" />
-              <span>Start with Windows</span>
-            </label>
-            <label class="checkbox-field">
-              <input id="start-minimized" type="checkbox" />
-              <span>Start minimized to tray</span>
-            </label>
-            <label class="checkbox-field">
-              <input id="auto-connect" type="checkbox" />
-              <span>Auto-connect on launch</span>
-            </label>
-            <label class="checkbox-field">
-              <input id="auto-retry-obs" type="checkbox" />
-              <span>Auto-retry OBS connection</span>
-            </label>
+          <!-- Updates -->
+          <div class="settings-section">
+            <h2 class="settings-section-title" data-i18n="updates">Updates</h2>
+            <div class="updates-panel">
+              <div class="update-version">
+                <strong data-i18n="update_current">Current version</strong>:
+                <span id="current-version">0.1.6</span>
+              </div>
+              <div id="update-status-display" class="update-status" data-status="idle">
+                <span id="update-status">Up to date</span>
+              </div>
+              <div class="button-row update-buttons">
+                <button id="check-updates-button" type="button" data-i18n="check_updates">Check Updates</button>
+                <button id="install-update-button" type="button" data-i18n="restart_to_update" hidden>Restart to Update</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tray Info -->
+          <div class="settings-info">
+            <p data-i18n="tray_info">Closing the window keeps the app running in the system tray.</p>
           </div>
         </section>
 
-        <section class="status-grid" aria-label="Current status">
-          <div class="status-line">
-            <span>Relay status</span>
-            <strong id="relay-status">disconnected</strong>
-          </div>
-          <div class="status-line">
-            <span>OBS status</span>
-            <strong id="obs-status">disconnected</strong>
-          </div>
-          <div class="status-line status-error">
-            <span>Last error</span>
-            <strong id="last-error">None</strong>
+        <!-- Changelog Tab -->
+        <section id="panel-changelog" class="tab-panel" role="tabpanel" aria-labelledby="tab-changelog">
+          <div class="changelog-section">
+            <h2 data-i18n="changelog">Changelog</h2>
+            <div id="changelog-list" class="changelog-list"></div>
           </div>
         </section>
+      </main>
+    </div>
 
-        <section class="updates-panel" aria-label="Application updates">
-          <div class="updates-copy">
-            <span>Version <strong id="current-version">0.0.0</strong></span>
-            <p id="update-status">Updates are available in the packaged app.</p>
-          </div>
-          <div class="updates-actions">
-            <button id="check-updates-button" type="button">Check Updates</button>
-            <button id="install-update-button" type="button" hidden>Restart to Update</button>
-          </div>
-        </section>
-
-        <section class="log-section" aria-label="Recent events">
-          <div class="log-header">
-            <h2>Recent events</h2>
-            <button id="clear-log-button" type="button">Clear</button>
-          </div>
-          <ol id="log-list" class="log-list"></ol>
-        </section>
-      </section>
-    </main>
     <script type="module" src="/src/renderer/main.ts"></script>
   </body>
 </html>
