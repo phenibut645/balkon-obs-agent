@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { AgentConfig, AgentState, LogEntry, ObsTestResult, RendererApi } from "./shared/types.js";
+import type { AgentConfig, AgentState, LogEntry, ObsTestResult, RendererApi, UpdateState } from "./shared/types.js";
 
 const api: RendererApi = {
   loadConfig: () => ipcRenderer.invoke("config:load") as Promise<AgentConfig>,
@@ -7,6 +7,8 @@ const api: RendererApi = {
   connect: (config: AgentConfig) => ipcRenderer.invoke("agent:connect", config) as Promise<AgentState>,
   disconnect: () => ipcRenderer.invoke("agent:disconnect") as Promise<AgentState>,
   testObs: (config: AgentConfig) => ipcRenderer.invoke("obs:test", config) as Promise<ObsTestResult>,
+  checkForUpdates: () => ipcRenderer.invoke("updates:check") as Promise<UpdateState>,
+  installUpdate: () => ipcRenderer.invoke("updates:install") as Promise<UpdateState>,
   onStateChange: (callback: (state: AgentState) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: AgentState) => callback(state);
     ipcRenderer.on("agent:state", listener);
@@ -16,6 +18,11 @@ const api: RendererApi = {
     const listener = (_event: Electron.IpcRendererEvent, entry: LogEntry) => callback(entry);
     ipcRenderer.on("agent:log", listener);
     return () => ipcRenderer.removeListener("agent:log", listener);
+  },
+  onUpdateState: (callback: (state: UpdateState) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: UpdateState) => callback(state);
+    ipcRenderer.on("updates:state", listener);
+    return () => ipcRenderer.removeListener("updates:state", listener);
   },
 };
 

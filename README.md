@@ -30,6 +30,42 @@ npm run dist
 
 The packaged installer is written to `release/`.
 
+## Publish A Release
+
+Balkon OBS Agent uses GitHub Releases for auto-updates.
+
+1. Commit all code changes.
+2. Bump the app version:
+
+```powershell
+npm version patch
+```
+
+3. Build the Windows installer:
+
+```powershell
+npm run dist
+```
+
+4. Create a GitHub Release with a tag that matches the version, for example `v0.1.1`.
+5. Upload these files from `release/` to the GitHub Release:
+
+```text
+Balkon-OBS-Agent-Setup-0.1.1.exe
+Balkon-OBS-Agent-Setup-0.1.1.exe.blockmap
+latest.yml
+```
+
+Do not commit `release/`, `dist/`, `win-unpacked/`, or `.exe` files into git.
+
+If you want Electron Builder to upload release assets directly, set `GH_TOKEN` to a GitHub token with release permissions and run:
+
+```powershell
+npm run dist:publish
+```
+
+Auto-update checks run only in the packaged app, not in `npm run dev`.
+
 ## Enable OBS WebSocket
 
 1. Open OBS Studio.

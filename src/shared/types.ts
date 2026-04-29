@@ -1,5 +1,14 @@
 export type RelayStatus = "disconnected" | "connecting" | "connected" | "error";
 export type ObsStatus = "disconnected" | "connected" | "error";
+export type UpdateStatus =
+  | "disabled"
+  | "idle"
+  | "checking"
+  | "available"
+  | "not-available"
+  | "downloading"
+  | "downloaded"
+  | "error";
 
 export interface AgentConfig {
   relayUrl: string;
@@ -29,14 +38,25 @@ export interface ObsTestResult {
   currentSceneName?: string | null;
 }
 
+export interface UpdateState {
+  status: UpdateStatus;
+  currentVersion: string;
+  availableVersion: string | null;
+  percent: number | null;
+  message: string;
+}
+
 export interface RendererApi {
   loadConfig(): Promise<AgentConfig>;
   saveConfig(config: AgentConfig): Promise<AgentConfig>;
   connect(config: AgentConfig): Promise<AgentState>;
   disconnect(): Promise<AgentState>;
   testObs(config: AgentConfig): Promise<ObsTestResult>;
+  checkForUpdates(): Promise<UpdateState>;
+  installUpdate(): Promise<UpdateState>;
   onStateChange(callback: (state: AgentState) => void): () => void;
   onLog(callback: (entry: LogEntry) => void): () => void;
+  onUpdateState(callback: (state: UpdateState) => void): () => void;
 }
 
 export const DEFAULT_CONFIG: AgentConfig = {

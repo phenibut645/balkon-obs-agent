@@ -107,6 +107,7 @@ h2 {
 
 .config-grid,
 .status-grid,
+.updates-panel,
 .log-section {
   border: 1px solid #ccd2d8;
   border-radius: 8px;
@@ -239,6 +240,61 @@ button:disabled {
   color: #9e3434;
 }
 
+.updates-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 18px;
+  padding: 15px 16px;
+}
+
+.updates-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.updates-copy span {
+  color: #52606d;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.updates-copy p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #17212b;
+}
+
+.updates-copy p[data-status="downloaded"] {
+  color: #116149;
+  font-weight: 800;
+}
+
+.updates-copy p[data-status="error"] {
+  color: #9e3434;
+  font-weight: 800;
+}
+
+.updates-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+#install-update-button {
+  border-color: #287d5c;
+  color: #ffffff;
+  background: #287d5c;
+}
+
+#install-update-button:hover:not(:disabled) {
+  border-color: #1f674b;
+  background: #1f674b;
+}
+
 .log-section {
   margin-top: 18px;
   overflow: hidden;
@@ -326,6 +382,15 @@ button:disabled {
 
   .status-grid {
     gap: 1px;
+  }
+
+  .updates-panel {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .updates-actions {
+    justify-content: flex-start;
   }
 
   .log-entry {

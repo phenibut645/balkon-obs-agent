@@ -1,5 +1,5 @@
 import "./styles.css";
-import { AgentConfig, AgentState, DEFAULT_CONFIG, LogEntry } from "../shared/types";
+import { AgentConfig, AgentState, DEFAULT_CONFIG, LogEntry, UpdateState } from "../shared/types";
 
 const form = document.querySelector<HTMLFormElement>("#config-form");
 const relayUrlInput = document.querySelector<HTMLInputElement>("#relay-url");
@@ -11,10 +11,14 @@ const saveButton = document.querySelector<HTMLButtonElement>("#save-button");
 const connectButton = document.querySelector<HTMLButtonElement>("#connect-button");
 const disconnectButton = document.querySelector<HTMLButtonElement>("#disconnect-button");
 const testObsButton = document.querySelector<HTMLButtonElement>("#test-obs-button");
+const checkUpdatesButton = document.querySelector<HTMLButtonElement>("#check-updates-button");
+const installUpdateButton = document.querySelector<HTMLButtonElement>("#install-update-button");
 const clearLogButton = document.querySelector<HTMLButtonElement>("#clear-log-button");
 const relayStatus = document.querySelector<HTMLElement>("#relay-status");
 const obsStatus = document.querySelector<HTMLElement>("#obs-status");
 const lastError = document.querySelector<HTMLElement>("#last-error");
+const currentVersion = document.querySelector<HTMLElement>("#current-version");
+const updateStatus = document.querySelector<HTMLElement>("#update-status");
 const relayPill = document.querySelector<HTMLElement>("#relay-pill");
 const obsPill = document.querySelector<HTMLElement>("#obs-pill");
 const logList = document.querySelector<HTMLOListElement>("#log-list");
@@ -30,10 +34,14 @@ const requiredElements = [
   connectButton,
   disconnectButton,
   testObsButton,
+  checkUpdatesButton,
+  installUpdateButton,
   clearLogButton,
   relayStatus,
   obsStatus,
   lastError,
+  currentVersion,
+  updateStatus,
   relayPill,
   obsPill,
   logList,
@@ -77,6 +85,14 @@ function renderState(state: AgentState): void {
   relayPill!.dataset.status = state.relayStatus;
   obsPill!.textContent = `OBS ${state.obsStatus}`;
   obsPill!.dataset.status = state.obsStatus;
+}
+
+function renderUpdateState(state: UpdateState): void {
+  currentVersion!.textContent = state.currentVersion;
+  updateStatus!.textContent = state.message;
+  updateStatus!.dataset.status = state.status;
+  installUpdateButton!.hidden = state.status !== "downloaded";
+  checkUpdatesButton!.disabled = state.status === "checking" || state.status === "downloading" || state.status === "disabled";
 }
 
 function addLog(entry: LogEntry): void {
@@ -178,8 +194,41 @@ clearLogButton!.addEventListener("click", () => {
   logList!.replaceChildren();
 });
 
+checkUpdatesButton!.addEventListener("click", () => {
+  checkUpdatesButton!.disabled = true;
+  window.balkonAgent.checkForUpdates()
+    .then(renderUpdateState)
+    .catch(error => {
+      addLog({
+        timestamp: new Date().toISOString(),
+        level: "error",
+        message: error instanceof Error ? error.message : "Failed to check for updates.",
+      });
+    })
+    .finally(() => {
+      if (updateStatus!.dataset.status !== "checking" && updateStatus!.dataset.status !== "downloading") {
+        checkUpdatesButton!.disabled = false;
+      }
+    });
+});
+
+installUpdateButton!.addEventListener("click", () => {
+  installUpdateButton!.disabled = true;
+  window.balkonAgent.installUpdate()
+    .then(renderUpdateState)
+    .catch(error => {
+      installUpdateButton!.disabled = false;
+      addLog({
+        timestamp: new Date().toISOString(),
+        level: "error",
+        message: error instanceof Error ? error.message : "Failed to install update.",
+      });
+    });
+});
+
 window.balkonAgent.onStateChange(renderState);
 window.balkonAgent.onLog(addLog);
+window.balkonAgent.onUpdateState(renderUpdateState);
 
 window.balkonAgent.loadConfig()
   .then(writeForm)

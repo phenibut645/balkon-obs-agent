@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { AgentConfig, LogEntry } from "../shared/types.js";
 import { ConfigStore } from "./configStore.js";
 import { RelayClient } from "./relayClient.js";
+import { UpdateManager } from "./updateManager.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,6 +12,7 @@ const __dirname = path.dirname(__filename);
 let mainWindow: BrowserWindow | null = null;
 let configStore: ConfigStore | null = null;
 const relayClient = new RelayClient();
+const updateManager = new UpdateManager();
 
 function getConfigStore(): ConfigStore {
   if (!configStore) {
@@ -58,11 +60,23 @@ function sendLog(entry: LogEntry): void {
   mainWindow?.webContents.send("agent:log", entry);
 }
 
+function sendUpdateState(): void {
+  mainWindow?.webContents.send("updates:state", updateManager.getState());
+}
+
 app.whenReady().then(() => {
   getConfigStore();
   relayClient.onState(sendState);
   relayClient.onLog(sendLog);
+  updateManager.onState(sendUpdateState);
   createWindow();
+
+  mainWindow?.webContents.once("did-finish-load", () => {
+    sendUpdateState();
+    setTimeout(() => {
+      void updateManager.checkForUpdates();
+    }, 1_500);
+  });
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -96,3 +110,7 @@ ipcMain.handle("obs:test", async (_event, config: AgentConfig) => {
   const normalizedConfig = await getConfigStore().save(config);
   return relayClient.testObs(normalizedConfig);
 });
+
+ipcMain.handle("updates:check", async () => updateManager.checkForUpdates());
+
+ipcMain.handle("updates:install", async () => updateManager.installDownloadedUpdate());
