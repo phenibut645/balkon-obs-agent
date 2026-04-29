@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Balkon OBS Agent</title>
+  </head>
+  <body>
+    <main id="app" class="app-shell">
+      <section class="workspace" aria-labelledby="app-title">
+        <header class="app-header">
+          <div>
+            <p class="eyebrow">Streamer desktop bridge</p>
+            <h1 id="app-title">Balkon OBS Agent</h1>
+          </div>
+          <div class="connection-pills" aria-label="Connection status">
+            <span id="relay-pill" class="status-pill" data-status="disconnected">Relay disconnected</span>
+            <span id="obs-pill" class="status-pill" data-status="disconnected">OBS disconnected</span>
+          </div>
+        </header>
+
+        <form id="config-form" class="config-grid">
+          <label class="field field-wide">
+            <span>Relay URL</span>
+            <input id="relay-url" name="relayUrl" type="text" inputmode="url" autocomplete="off" spellcheck="false" />
+          </label>
+
+          <label class="field">
+            <span>Agent ID</span>
+            <input id="agent-id" name="agentId" type="text" autocomplete="off" spellcheck="false" />
+          </label>
+
+          <label class="field">
+            <span>Agent Token</span>
+            <input id="agent-token" name="agentToken" type="password" autocomplete="off" spellcheck="false" />
+          </label>
+
+          <label class="field">
+            <span>OBS WebSocket URL</span>
+            <input id="obs-url" name="obsUrl" type="text" inputmode="url" autocomplete="off" spellcheck="false" />
+          </label>
+
+          <label class="field">
+            <span>OBS WebSocket Password</span>
+            <input id="obs-password" name="obsPassword" type="password" autocomplete="off" spellcheck="false" />
+          </label>
+
+          <div class="button-row field-wide" role="group" aria-label="Agent controls">
+            <button id="save-button" type="submit">Save</button>
+            <button id="connect-button" type="button">Connect</button>
+            <button id="disconnect-button" type="button">Disconnect</button>
+            <button id="test-obs-button" type="button">Test OBS</button>
+          </div>
+        </form>
+
+        <section class="status-grid" aria-label="Current status">
+          <div class="status-line">
+            <span>Relay status</span>
+            <strong id="relay-status">disconnected</strong>
+          </div>
+          <div class="status-line">
+            <span>OBS status</span>
+            <strong id="obs-status">disconnected</strong>
+          </div>
+          <div class="status-line status-error">
+            <span>Last error</span>
+            <strong id="last-error">None</strong>
+          </div>
+        </section>
+
+        <section class="log-section" aria-label="Recent events">
+          <div class="log-header">
+            <h2>Recent events</h2>
+            <button id="clear-log-button" type="button">Clear</button>
+          </div>
+          <ol id="log-list" class="log-list"></ol>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="/src/renderer/main.ts"></script>
+  </body>
+</html>

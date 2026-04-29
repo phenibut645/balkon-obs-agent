@@ -1,0 +1,59 @@
+{
+  "name": "balkon-obs-agent",
+  "version": "0.1.0",
+  "description": "Standalone desktop OBS agent for Balkon streamers.",
+  "author": "phenibut645",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/main/main/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
+    "dev:renderer": "vite --host 127.0.0.1",
+    "dev:electron": "wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
+    "build": "tsc -p tsconfig.main.json && tsc -p tsconfig.renderer.json --noEmit && vite build",
+    "dist": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win nsis"
+  },
+  "dependencies": {
+    "obs-websocket-js": "^5.0.8",
+    "ws": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "@types/ws": "^8.18.1",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.0.0",
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.9.2",
+    "vite": "^5.4.20",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "ee.thkit.aleksandermilisenko23.balkon.obsagent",
+    "productName": "Balkon OBS Agent",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
