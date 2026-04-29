@@ -1,6 +1,6 @@
 {
   "name": "balkon-obs-agent",
-  "version": "0.1.1",
+  "version": "0.1.5",
   "description": "Standalone desktop OBS agent for Balkon streamers.",
   "author": "phenibut645",
   "license": "MIT",
@@ -14,7 +14,7 @@
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
     "dev:renderer": "vite --host 127.0.0.1",
     "dev:electron": "wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
-    "build": "tsc -p tsconfig.main.json && tsc -p tsconfig.renderer.json --noEmit && vite build",
+    "build": "tsc -p tsconfig.main.json && tsc -p tsconfig.renderer.json --noEmit && node scripts/copy-preload.mjs && vite build",
     "dist": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win nsis",
     "dist:publish": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win nsis --publish always"
   },

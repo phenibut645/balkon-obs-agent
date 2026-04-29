@@ -1,8 +1,10 @@
+import { createRequire } from "node:module";
 import { app } from "electron";
-import { autoUpdater } from "electron-updater";
 import { UpdateState } from "../shared/types.js";
 
 type UpdateListener = (state: UpdateState) => void;
+const require = createRequire(import.meta.url);
+const { autoUpdater } = require("electron-updater") as typeof import("electron-updater");
 
 export class UpdateManager {
   private readonly listeners = new Set<UpdateListener>();
@@ -16,7 +18,7 @@ export class UpdateManager {
 
   constructor() {
     autoUpdater.autoDownload = true;
-    autoUpdater.autoInstallOnAppQuit = false;
+    autoUpdater.autoInstallOnAppQuit = true;
     this.registerEvents();
   }
 
@@ -50,7 +52,7 @@ export class UpdateManager {
       this.setState({
         status: "error",
         percent: null,
-        message: error instanceof Error ? error.message : "Failed to check for updates.",
+        message: this.formatUpdateError(error),
       });
     }
 
@@ -119,9 +121,27 @@ export class UpdateManager {
       this.setState({
         status: "error",
         percent: null,
-        message: error instanceof Error ? error.message : "Updater error.",
+        message: this.formatUpdateError(error),
       });
     });
+  }
+
+  private formatUpdateError(error: unknown): string {
+    const message = error instanceof Error ? error.message : String(error || "");
+
+    if (message.includes("latest.yml") && message.includes("404")) {
+      return "Update metadata is missing from the latest GitHub Release. Upload latest.yml together with the installer and blockmap.";
+    }
+
+    if (message.includes("net::ERR_INTERNET_DISCONNECTED") || message.includes("ENOTFOUND")) {
+      return "Cannot check for updates. Check your internet connection.";
+    }
+
+    if (message.includes("401") || message.includes("403")) {
+      return "Cannot check for updates. GitHub denied access to the release.";
+    }
+
+    return message || "Failed to check for updates.";
   }
 
   private setState(partial: Partial<UpdateState>): void {

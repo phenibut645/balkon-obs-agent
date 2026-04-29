@@ -10,12 +10,15 @@ import {
   ObsRelayHelloMessage,
   ObsRelayLegacyErrorMessage,
   ObsRelayLegacyResultMessage,
+  ObsRelayPingMessage,
+  ObsRelayPongMessage,
   ObsStatus,
   RelayStatus,
 } from "../shared/types.js";
 import { ObsClient } from "./obsClient.js";
 
 const RETRY_DELAY_MS = 3_000;
+const HEARTBEAT_INTERVAL_MS = 15_000;
 
 type StateListener = (state: AgentState) => void;
 type LogListener = (entry: LogEntry) => void;
@@ -57,6 +60,9 @@ export class RelayClient {
   private lastError: string | null = null;
   private readonly stateListeners = new Set<StateListener>();
   private readonly logListeners = new Set<LogListener>();
+  private heartbeatTimer: NodeJS.Timeout | null = null;
+  private readonly heartbeatDebugEnabled = process.env.OBS_AGENT_DEBUG_HEARTBEAT === "1"
+    || process.env.OBS_AGENT_DEBUG_HEARTBEAT?.toLowerCase() === "true";
 
   onState(listener: StateListener): () => void {
     this.stateListeners.add(listener);
@@ -91,6 +97,7 @@ export class RelayClient {
   async disconnect(): Promise<AgentState> {
     this.manualDisconnect = true;
     this.clearReconnectTimer();
+    this.stopHeartbeat();
     this.closeSocket();
     await this.obsClient.disconnect();
     this.setState({ relayStatus: "disconnected", obsStatus: "disconnected", lastError: null });
@@ -140,6 +147,7 @@ export class RelayClient {
       });
 
       socket.on("close", () => {
+        this.stopHeartbeat();
         if (this.socket === socket) {
           this.socket = null;
         }
@@ -192,7 +200,21 @@ export class RelayClient {
       }
 
       this.setState({ relayStatus: "connected", lastError: null });
+      this.startHeartbeat();
       this.log("success", `Authenticated as agent '${parsed.agentId}'.`);
+      return;
+    }
+
+    if (parsed.type === "pong") {
+      if (typeof parsed.ts !== "number" || !Number.isFinite(parsed.ts)) {
+        this.log("warn", "Relay pong is missing ts.");
+        return;
+      }
+
+      if (this.heartbeatDebugEnabled) {
+        this.log("info", `Heartbeat pong received (${parsed.ts}).`);
+      }
+
       return;
     }
 
@@ -313,7 +335,7 @@ export class RelayClient {
     this.sendJson(message);
   }
 
-  private sendJson(message: ObsRelayCommandResultMessage | ObsRelayLegacyResultMessage | ObsRelayLegacyErrorMessage | ObsRelayErrorMessage): void {
+  private sendJson(message: ObsRelayCommandResultMessage | ObsRelayLegacyResultMessage | ObsRelayLegacyErrorMessage | ObsRelayErrorMessage | ObsRelayPingMessage | ObsRelayPongMessage): void {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       return;
     }
@@ -342,6 +364,7 @@ export class RelayClient {
   }
 
   private closeSocket(): void {
+    this.stopHeartbeat();
     const socket = this.socket;
     this.socket = null;
     if (!socket || socket.readyState === WebSocket.CLOSED) {
@@ -350,6 +373,31 @@ export class RelayClient {
 
     socket.removeAllListeners();
     socket.close();
+  }
+
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+
+    this.heartbeatTimer = setInterval(() => {
+      const message: ObsRelayPingMessage = {
+        type: "ping",
+        ts: Date.now(),
+      };
+
+      this.sendJson(message);
+      if (this.heartbeatDebugEnabled) {
+        this.log("info", `Heartbeat ping sent (${message.ts}).`);
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+  }
+
+  private stopHeartbeat(): void {
+    if (!this.heartbeatTimer) {
+      return;
+    }
+
+    clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = null;
   }
 
   private setState(partial: Partial<AgentState>): void {

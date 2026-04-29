@@ -17,6 +17,7 @@ const clearLogButton = document.querySelector<HTMLButtonElement>("#clear-log-but
 const relayStatus = document.querySelector<HTMLElement>("#relay-status");
 const obsStatus = document.querySelector<HTMLElement>("#obs-status");
 const lastError = document.querySelector<HTMLElement>("#last-error");
+const titleVersion = document.querySelector<HTMLElement>("#title-version");
 const currentVersion = document.querySelector<HTMLElement>("#current-version");
 const updateStatus = document.querySelector<HTMLElement>("#update-status");
 const relayPill = document.querySelector<HTMLElement>("#relay-pill");
@@ -40,6 +41,7 @@ const requiredElements = [
   relayStatus,
   obsStatus,
   lastError,
+  titleVersion,
   currentVersion,
   updateStatus,
   relayPill,
@@ -88,6 +90,7 @@ function renderState(state: AgentState): void {
 }
 
 function renderUpdateState(state: UpdateState): void {
+  titleVersion!.textContent = `v${state.currentVersion}`;
   currentVersion!.textContent = state.currentVersion;
   updateStatus!.textContent = state.message;
   updateStatus!.dataset.status = state.status;

@@ -59,6 +59,19 @@ h1 {
   letter-spacing: 0;
 }
 
+.title-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.title-version {
+  color: #69727d;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
 h2 {
   margin: 0;
   font-size: 1rem;

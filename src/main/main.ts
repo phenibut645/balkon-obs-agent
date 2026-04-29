@@ -31,7 +31,7 @@ function createWindow(): void {
     title: "Balkon OBS Agent",
     backgroundColor: "#eef2f5",
     webPreferences: {
-      preload: path.join(__dirname, "../preload.js"),
+      preload: path.join(__dirname, "../preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,

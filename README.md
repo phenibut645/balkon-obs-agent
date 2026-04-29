@@ -56,6 +56,8 @@ Balkon-OBS-Agent-Setup-0.1.1.exe.blockmap
 latest.yml
 ```
 
+The filename must be exactly `latest.yml`. Auto-updates will fail with a 404 if this asset is missing from the latest release.
+
 Do not commit `release/`, `dist/`, `win-unpacked/`, or `.exe` files into git.
 
 If you want Electron Builder to upload release assets directly, set `GH_TOKEN` to a GitHub token with release permissions and run:
@@ -65,6 +67,12 @@ npm run dist:publish
 ```
 
 Auto-update checks run only in the packaged app, not in `npm run dev`.
+
+If a previous build is stuck during installation, close it first:
+
+```powershell
+taskkill /IM "Balkon OBS Agent.exe" /F
+```
 
 ## Enable OBS WebSocket
 

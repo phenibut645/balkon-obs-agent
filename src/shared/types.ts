@@ -87,6 +87,16 @@ export interface ObsRelayHelloAckMessage {
   agentId: string;
 }
 
+export interface ObsRelayPingMessage {
+  type: "ping";
+  ts: number;
+}
+
+export interface ObsRelayPongMessage {
+  type: "pong";
+  ts: number;
+}
+
 export interface ObsRelayErrorMessage {
   type: "error";
   requestId?: string;
