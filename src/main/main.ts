@@ -157,6 +157,7 @@ app.whenReady().then(() => {
     showWindow();
   });
 
+  relayClient.onState(sendState);
   relayClient.onLog(sendLog);
   updateManager.onState(sendUpdateState);
 
@@ -206,6 +207,9 @@ app.on("window-all-closed", () => {
   // Do not quit when windows close — stay in tray.
   // Quit only happens via tray Quit or before-quit.
 });
+
+// App
+ipcMain.handle("app:getVersion", () => app.getVersion());
 
 // Config
 ipcMain.handle("config:load", async () => getConfigStore().load());

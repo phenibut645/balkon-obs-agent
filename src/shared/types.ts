@@ -47,6 +47,7 @@ export interface UpdateState {
 }
 
 export interface RendererApi {
+  getVersion(): Promise<string>;
   loadConfig(): Promise<AgentConfig>;
   saveConfig(config: AgentConfig): Promise<AgentConfig>;
   connect(config: AgentConfig): Promise<AgentState>;

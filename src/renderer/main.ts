@@ -1,7 +1,7 @@
 import "./styles.css";
 import { AgentConfig, AgentSettings, AgentState, DEFAULT_CONFIG, DEFAULT_SETTINGS, LogEntry, UpdateState } from "../shared/types";
-import { CHANGELOG } from "../shared/changelog";
-import { t, setLanguage, getLanguage } from "./i18n";
+import { CHANGELOG, ChangelogEntry } from "../shared/changelog";
+import { t, setLanguage } from "./i18n";
 
 // ============================================================================
 // DOM Elements - Tabs
@@ -109,10 +109,17 @@ if (requiredElements.some(element => !element)) {
 }
 
 // ============================================================================
+// DOM Elements - Header version
+// ============================================================================
+
+const appVersion = document.querySelector<HTMLElement>("#app-version");
+
+// ============================================================================
 // UI State
 // ============================================================================
 
 let currentTab: "main" | "settings" | "changelog" = "main";
+let lastKnownState: AgentState | null = null;
 
 // ============================================================================
 // Tab Management
@@ -207,6 +214,8 @@ function updateTranslations(): void {
 function applyLanguage(lang: "en" | "ru" | "et"): void {
   setLanguage(lang);
   updateTranslations();
+  // Re-render state so translated strings (e.g. error_none) are refreshed.
+  if (lastKnownState) renderState(lastKnownState);
 }
 
 // ============================================================================
@@ -214,18 +223,22 @@ function applyLanguage(lang: "en" | "ru" | "et"): void {
 // ============================================================================
 
 function renderState(state: AgentState): void {
+  lastKnownState = state;
+
   relayStatus!.textContent = state.relayStatus;
   obsStatus!.textContent = state.obsStatus;
   lastError!.textContent = state.lastError || t("error_none");
 
-  relayPillStatus!.textContent = state.relayStatus;
-  obsPillStatus!.textContent = state.obsStatus;
-  relayPill!.dataset.status = state.relayStatus;
-  obsPill!.dataset.status = state.obsStatus;
+  if (relayPillStatus) relayPillStatus.textContent = state.relayStatus;
+  if (obsPillStatus) obsPillStatus.textContent = state.obsStatus;
+  if (relayPill) relayPill.dataset.status = state.relayStatus;
+  if (obsPill) obsPill.dataset.status = state.obsStatus;
 }
 
 function renderUpdateState(state: UpdateState): void {
   currentVersion!.textContent = state.currentVersion;
+  // Keep header version badge in sync
+  if (appVersion) appVersion.textContent = `v${state.currentVersion}`;
   updateStatus!.textContent = state.message;
   const statusDisplay = updateStatus!.parentElement;
   if (statusDisplay) {
@@ -258,9 +271,18 @@ function addLog(entry: LogEntry): void {
   }
 }
 
-function renderChangelog(): void {
+interface GitHubRelease {
+  tag_name: string;
+  name: string;
+  published_at: string;
+  body: string;
+  prerelease: boolean;
+  draft: boolean;
+}
+
+function renderChangelogEntries(entries: ChangelogEntry[]): void {
   changelogList!.replaceChildren();
-  for (const entry of CHANGELOG) {
+  for (const entry of entries) {
     const versionDiv = document.createElement("div");
     versionDiv.className = "changelog-entry";
 
@@ -279,6 +301,58 @@ function renderChangelog(): void {
 
     versionDiv.append(versionTitle, changesList);
     changelogList!.appendChild(versionDiv);
+  }
+}
+
+function parseGitHubReleases(releases: GitHubRelease[]): ChangelogEntry[] {
+  return releases
+    .filter(r => !r.draft && !r.prerelease)
+    .map(r => {
+      const version = r.tag_name.replace(/^v/, "");
+      const changes: string[] = (r.body || "")
+        .split("\n")
+        .map(line => line.replace(/^[-*]\s+/, "").trim())
+        .filter(line => line.length > 0 && !line.startsWith("#"));
+      return { version, changes: changes.length ? changes : ["See release notes."] };
+    });
+}
+
+async function loadChangelog(): Promise<void> {
+  // Show static changelog immediately while fetching
+  renderChangelogEntries(CHANGELOG);
+
+  // Show loading indicator at top
+  const loadingDiv = document.createElement("div");
+  loadingDiv.id = "changelog-loading";
+  loadingDiv.className = "changelog-loading";
+  loadingDiv.textContent = "Fetching latest changes from GitHub…";
+  changelogList!.prepend(loadingDiv);
+
+  try {
+    const response = await fetch(
+      "https://api.github.com/repos/phenibut645/balkon-obs-agent/releases",
+      { headers: { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" } },
+    );
+
+    if (!response.ok) throw new Error(`GitHub API ${response.status}`);
+
+    const releases = (await response.json()) as GitHubRelease[];
+    const entries = parseGitHubReleases(releases);
+
+    if (entries.length > 0) {
+      renderChangelogEntries(entries);
+      // Mark as fetched from GitHub
+      const badge = document.createElement("p");
+      badge.className = "changelog-source-badge";
+      badge.textContent = "↑ Loaded from GitHub Releases";
+      changelogList!.prepend(badge);
+    } else {
+      // No published releases yet, keep static
+      renderChangelogEntries(CHANGELOG);
+    }
+  } catch {
+    // Network failure or no releases — static data is already shown, just remove loading
+    document.getElementById("changelog-loading")?.remove();
   }
 }
 
@@ -457,8 +531,16 @@ async function initializeApp(): Promise<void> {
     applyLanguage(DEFAULT_SETTINGS.language);
   }
 
-  // Render changelog
-  renderChangelog();
+  // Fetch version from main process and update header badge
+  try {
+    const version = await window.balkonAgent.getVersion();
+    if (appVersion) appVersion.textContent = `v${version}`;
+  } catch {
+    // Keep hardcoded fallback in HTML
+  }
+
+  // Render changelog (static first, then try GitHub)
+  void loadChangelog();
 
   // Apply initial translations
   updateTranslations();

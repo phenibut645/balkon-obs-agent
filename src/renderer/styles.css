@@ -596,6 +596,27 @@ button:active:not(:disabled) {
   margin-bottom: 0;
 }
 
+.changelog-loading {
+  padding: 12px;
+  color: #5a6672;
+  font-size: 13px;
+  font-style: italic;
+  text-align: center;
+  border: 1px dashed #ccd2d8;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.changelog-source-badge {
+  margin: 0 0 12px;
+  padding: 6px 10px;
+  background: #d4edda;
+  color: #155724;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 /* ============================================================================
  * Responsive Design
  * ============================================================================ */
