@@ -9,6 +9,12 @@ import { UpdateManager } from "./updateManager.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Single instance lock — if another instance tries to launch, focus this one instead.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
+
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
@@ -145,7 +151,12 @@ function applyStartWithWindows(enabled: boolean): void {
 
 app.whenReady().then(() => {
   const store = getConfigStore();
-  relayClient.onState(sendState);
+
+  // When a second instance is launched, focus the existing window instead.
+  app.on("second-instance", () => {
+    showWindow();
+  });
+
   relayClient.onLog(sendLog);
   updateManager.onState(sendUpdateState);
 
