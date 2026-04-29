@@ -1,6 +1,6 @@
 {
   "name": "balkon-obs-agent",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Standalone desktop OBS agent for Balkon streamers.",
   "author": "phenibut645",
   "license": "MIT",
