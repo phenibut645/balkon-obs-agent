@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { app } from "electron";
-import { AgentConfig, DEFAULT_CONFIG } from "../shared/types.js";
+import { AgentConfig, AgentSettings, DEFAULT_CONFIG, DEFAULT_SETTINGS } from "../shared/types.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -11,6 +11,10 @@ function normalizeString(value: unknown, fallback: string): string {
   return typeof value === "string" ? value : fallback;
 }
 
+function normalizeBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
 export class ConfigStore {
   private readonly filePath: string;
 
@@ -18,31 +22,54 @@ export class ConfigStore {
     this.filePath = path.join(app.getPath("userData"), "config.json");
   }
 
-  async load(): Promise<AgentConfig> {
+  private async readRaw(): Promise<Record<string, unknown>> {
     try {
       const raw = await readFile(this.filePath, "utf8");
       const parsed = JSON.parse(raw) as unknown;
-      if (!isRecord(parsed)) {
-        return DEFAULT_CONFIG;
-      }
-
-      return {
-        relayUrl: normalizeString(parsed.relayUrl, DEFAULT_CONFIG.relayUrl),
-        agentId: normalizeString(parsed.agentId, DEFAULT_CONFIG.agentId),
-        agentToken: normalizeString(parsed.agentToken, DEFAULT_CONFIG.agentToken),
-        obsUrl: normalizeString(parsed.obsUrl, DEFAULT_CONFIG.obsUrl),
-        obsPassword: normalizeString(parsed.obsPassword, DEFAULT_CONFIG.obsPassword),
-      };
+      return isRecord(parsed) ? parsed : {};
     } catch {
-      return DEFAULT_CONFIG;
+      return {};
     }
+  }
+
+  private async writeRaw(data: Record<string, unknown>): Promise<void> {
+    await mkdir(path.dirname(this.filePath), { recursive: true });
+    await writeFile(this.filePath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+  }
+
+  async load(): Promise<AgentConfig> {
+    const parsed = await this.readRaw();
+    return {
+      relayUrl: normalizeString(parsed.relayUrl, DEFAULT_CONFIG.relayUrl),
+      agentId: normalizeString(parsed.agentId, DEFAULT_CONFIG.agentId),
+      agentToken: normalizeString(parsed.agentToken, DEFAULT_CONFIG.agentToken),
+      obsUrl: normalizeString(parsed.obsUrl, DEFAULT_CONFIG.obsUrl),
+      obsPassword: normalizeString(parsed.obsPassword, DEFAULT_CONFIG.obsPassword),
+    };
   }
 
   async save(config: AgentConfig): Promise<AgentConfig> {
     const normalized = this.normalize(config);
-    await mkdir(path.dirname(this.filePath), { recursive: true });
-    await writeFile(this.filePath, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
+    const current = await this.readRaw();
+    await this.writeRaw({ ...current, ...normalized });
     return normalized;
+  }
+
+  async loadSettings(): Promise<AgentSettings> {
+    const parsed = await this.readRaw();
+    const s = isRecord(parsed.settings) ? parsed.settings : {};
+    return {
+      startWithWindows: normalizeBoolean(s.startWithWindows, DEFAULT_SETTINGS.startWithWindows),
+      startMinimizedToTray: normalizeBoolean(s.startMinimizedToTray, DEFAULT_SETTINGS.startMinimizedToTray),
+      autoConnectOnLaunch: normalizeBoolean(s.autoConnectOnLaunch, DEFAULT_SETTINGS.autoConnectOnLaunch),
+      autoRetryObs: normalizeBoolean(s.autoRetryObs, DEFAULT_SETTINGS.autoRetryObs),
+    };
+  }
+
+  async saveSettings(settings: AgentSettings): Promise<AgentSettings> {
+    const current = await this.readRaw();
+    await this.writeRaw({ ...current, settings });
+    return settings;
   }
 
   normalize(config: AgentConfig): AgentConfig {

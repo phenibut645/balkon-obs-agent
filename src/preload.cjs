@@ -8,6 +8,8 @@ const api = {
   testObs: config => ipcRenderer.invoke("obs:test", config),
   checkForUpdates: () => ipcRenderer.invoke("updates:check"),
   installUpdate: () => ipcRenderer.invoke("updates:install"),
+  loadSettings: () => ipcRenderer.invoke("settings:load"),
+  saveSettings: settings => ipcRenderer.invoke("settings:save", settings),
   onStateChange: callback => {
     const listener = (_event, state) => callback(state);
     ipcRenderer.on("agent:state", listener);
@@ -22,6 +24,11 @@ const api = {
     const listener = (_event, state) => callback(state);
     ipcRenderer.on("updates:state", listener);
     return () => ipcRenderer.removeListener("updates:state", listener);
+  },
+  onTrayAction: callback => {
+    const listener = (_event, action) => callback(action);
+    ipcRenderer.on("tray:action", listener);
+    return () => ipcRenderer.removeListener("tray:action", listener);
   },
 };
 

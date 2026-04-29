@@ -1,5 +1,5 @@
 export type RelayStatus = "disconnected" | "connecting" | "connected" | "error";
-export type ObsStatus = "disconnected" | "connected" | "error";
+export type ObsStatus = "disconnected" | "connected" | "waiting" | "error";
 export type UpdateStatus =
   | "disabled"
   | "idle"
@@ -54,9 +54,12 @@ export interface RendererApi {
   testObs(config: AgentConfig): Promise<ObsTestResult>;
   checkForUpdates(): Promise<UpdateState>;
   installUpdate(): Promise<UpdateState>;
+  loadSettings(): Promise<AgentSettings>;
+  saveSettings(settings: AgentSettings): Promise<AgentSettings>;
   onStateChange(callback: (state: AgentState) => void): () => void;
   onLog(callback: (entry: LogEntry) => void): () => void;
   onUpdateState(callback: (state: UpdateState) => void): () => void;
+  onTrayAction(callback: (action: "open" | "connect" | "disconnect") => void): () => void;
 }
 
 export const DEFAULT_CONFIG: AgentConfig = {
@@ -65,6 +68,20 @@ export const DEFAULT_CONFIG: AgentConfig = {
   agentToken: "",
   obsUrl: "ws://127.0.0.1:4455",
   obsPassword: "",
+};
+
+export interface AgentSettings {
+  startWithWindows: boolean;
+  startMinimizedToTray: boolean;
+  autoConnectOnLaunch: boolean;
+  autoRetryObs: boolean;
+}
+
+export const DEFAULT_SETTINGS: AgentSettings = {
+  startWithWindows: false,
+  startMinimizedToTray: false,
+  autoConnectOnLaunch: false,
+  autoRetryObs: true,
 };
 
 export type ObsRelayCommandName =

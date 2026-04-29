@@ -19,6 +19,7 @@ import { ObsClient } from "./obsClient.js";
 
 const RETRY_DELAY_MS = 3_000;
 const HEARTBEAT_INTERVAL_MS = 15_000;
+const OBS_RETRY_INTERVAL_MS = 5_000;
 
 type StateListener = (state: AgentState) => void;
 type LogListener = (entry: LogEntry) => void;
@@ -64,6 +65,11 @@ export class RelayClient {
   private readonly heartbeatDebugEnabled = process.env.OBS_AGENT_DEBUG_HEARTBEAT === "1"
     || process.env.OBS_AGENT_DEBUG_HEARTBEAT?.toLowerCase() === "true";
 
+  // OBS auto-retry
+  private autoRetryObs = true;
+  private obsRetryTimer: NodeJS.Timeout | null = null;
+  private obsRetryLogged = false;
+
   onState(listener: StateListener): () => void {
     this.stateListeners.add(listener);
     listener(this.getState());
@@ -83,6 +89,15 @@ export class RelayClient {
     };
   }
 
+  setAutoRetryObs(enabled: boolean): void {
+    this.autoRetryObs = enabled;
+    if (!enabled) {
+      this.stopObsRetryLoop();
+    } else if (this.relayStatus === "connected" && this.obsStatus !== "connected") {
+      this.startObsRetryLoop();
+    }
+  }
+
   async connect(config: AgentConfig): Promise<AgentState> {
     this.config = config;
     this.manualDisconnect = false;
@@ -98,6 +113,7 @@ export class RelayClient {
     this.manualDisconnect = true;
     this.clearReconnectTimer();
     this.stopHeartbeat();
+    this.stopObsRetryLoop();
     this.closeSocket();
     await this.obsClient.disconnect();
     this.setState({ relayStatus: "disconnected", obsStatus: "disconnected", lastError: null });
@@ -202,6 +218,9 @@ export class RelayClient {
       this.setState({ relayStatus: "connected", lastError: null });
       this.startHeartbeat();
       this.log("success", `Authenticated as agent '${parsed.agentId}'.`);
+      if (this.autoRetryObs) {
+        this.startObsRetryLoop();
+      }
       return;
     }
 
@@ -248,6 +267,10 @@ export class RelayClient {
   private async handleCommand(message: ObsRelayCommandMessage): Promise<void> {
     try {
       const data = await this.executeCommand(message);
+      if (this.obsStatus !== "connected") {
+        this.obsRetryLogged = false;
+        this.stopObsRetryLoop();
+      }
       this.setState({ obsStatus: "connected", lastError: null });
       this.sendCommandResult({
         type: "command_result",
@@ -264,6 +287,9 @@ export class RelayClient {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown OBS command error.";
       this.setState({ obsStatus: "error", lastError: errorMessage });
+      if (this.autoRetryObs && !this.obsRetryTimer) {
+        this.startObsRetryLoop();
+      }
       this.sendCommandResult({
         type: "command_result",
         requestId: message.requestId,
@@ -373,6 +399,54 @@ export class RelayClient {
 
     socket.removeAllListeners();
     socket.close();
+  }
+
+  private startObsRetryLoop(): void {
+    if (this.obsRetryTimer) {
+      return;
+    }
+
+    const attempt = async (): Promise<void> => {
+      if (this.obsStatus === "connected" || this.manualDisconnect) {
+        this.stopObsRetryLoop();
+        return;
+      }
+
+      const config = this.config;
+      if (!config) {
+        return;
+      }
+
+      if (!this.obsRetryLogged) {
+        this.log("info", "Waiting for OBS...");
+        this.obsRetryLogged = true;
+        this.setState({ obsStatus: "waiting" });
+      }
+
+      try {
+        const result = await this.obsClient.test(config);
+        if (result.ok) {
+          this.obsRetryLogged = false;
+          this.stopObsRetryLoop();
+          this.setState({ obsStatus: "connected", lastError: null });
+          this.log("success", result.message);
+        }
+      } catch {
+        // silent — will retry
+      }
+    };
+
+    void attempt();
+    this.obsRetryTimer = setInterval(() => { void attempt(); }, OBS_RETRY_INTERVAL_MS);
+  }
+
+  private stopObsRetryLoop(): void {
+    if (!this.obsRetryTimer) {
+      return;
+    }
+
+    clearInterval(this.obsRetryTimer);
+    this.obsRetryTimer = null;
   }
 
   private startHeartbeat(): void {

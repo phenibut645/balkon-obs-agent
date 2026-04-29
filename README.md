@@ -126,3 +126,31 @@ Click `Save`, then `Connect`.
 - The agent stores configuration in the local Electron user data directory.
 - Do not commit real Agent Tokens.
 - The app masks token/password inputs and does not print the full Agent Token in logs.
+
+## Background / Tray Mode
+
+Balkon OBS Agent runs as a system-tray application. When you close the window the app keeps running in the background. Right-click the tray icon to control it.
+
+### Behavior Settings
+
+| Setting | Description |
+|---|---|
+| **Start with Windows** | Registers the app as a login item so it launches automatically on Windows startup (hidden to tray). Has no effect in development mode. |
+| **Start minimized to tray** | On launch, skip showing the main window and go directly to the tray. Useful together with "Start with Windows". |
+| **Auto-connect on launch** | Automatically connect to the relay when the app starts, provided Agent ID and Token are already saved. |
+| **Auto-retry OBS connection** | If OBS is not reachable when the relay connects, the agent waits and retries every 5 seconds until OBS comes online. Status shows as `waiting` while retrying. Only the first retry attempt is logged to avoid log spam. |
+
+### Close vs Quit
+
+- **Closing the window** hides it to the tray. The agent stays connected.
+- **Quit** from the tray context menu fully exits the app and disconnects.
+
+### Tray Context Menu
+
+| Item | Action |
+|---|---|
+| Open | Show the main window |
+| Connect | Connect to the relay (using saved config) |
+| Disconnect | Disconnect from the relay |
+| Check for Updates | Check GitHub Releases for a new version |
+| Quit | Disconnect and exit |

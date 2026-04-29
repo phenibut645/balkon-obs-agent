@@ -1,5 +1,5 @@
 import "./styles.css";
-import { AgentConfig, AgentState, DEFAULT_CONFIG, LogEntry, UpdateState } from "../shared/types";
+import { AgentConfig, AgentSettings, AgentState, DEFAULT_CONFIG, DEFAULT_SETTINGS, LogEntry, UpdateState } from "../shared/types";
 
 const form = document.querySelector<HTMLFormElement>("#config-form");
 const relayUrlInput = document.querySelector<HTMLInputElement>("#relay-url");
@@ -24,6 +24,12 @@ const relayPill = document.querySelector<HTMLElement>("#relay-pill");
 const obsPill = document.querySelector<HTMLElement>("#obs-pill");
 const logList = document.querySelector<HTMLOListElement>("#log-list");
 
+// Behavior settings checkboxes
+const startWithWindowsCheck = document.querySelector<HTMLInputElement>("#start-with-windows");
+const startMinimizedCheck = document.querySelector<HTMLInputElement>("#start-minimized");
+const autoConnectCheck = document.querySelector<HTMLInputElement>("#auto-connect");
+const autoRetryObsCheck = document.querySelector<HTMLInputElement>("#auto-retry-obs");
+
 const requiredElements = [
   form,
   relayUrlInput,
@@ -47,6 +53,10 @@ const requiredElements = [
   relayPill,
   obsPill,
   logList,
+  startWithWindowsCheck,
+  startMinimizedCheck,
+  autoConnectCheck,
+  autoRetryObsCheck,
 ];
 
 if (requiredElements.some(element => !element)) {
@@ -69,6 +79,22 @@ function writeForm(config: AgentConfig): void {
   agentTokenInput!.value = config.agentToken;
   obsUrlInput!.value = config.obsUrl;
   obsPasswordInput!.value = config.obsPassword;
+}
+
+function readSettings(): AgentSettings {
+  return {
+    startWithWindows: startWithWindowsCheck!.checked,
+    startMinimizedToTray: startMinimizedCheck!.checked,
+    autoConnectOnLaunch: autoConnectCheck!.checked,
+    autoRetryObs: autoRetryObsCheck!.checked,
+  };
+}
+
+function writeSettings(settings: AgentSettings): void {
+  startWithWindowsCheck!.checked = settings.startWithWindows;
+  startMinimizedCheck!.checked = settings.startMinimizedToTray;
+  autoConnectCheck!.checked = settings.autoConnectOnLaunch;
+  autoRetryObsCheck!.checked = settings.autoRetryObs;
 }
 
 function setBusy(isBusy: boolean): void {
@@ -131,6 +157,10 @@ async function saveConfig(): Promise<void> {
   });
 }
 
+async function saveSettings(): Promise<void> {
+  await window.balkonAgent.saveSettings(readSettings());
+}
+
 form!.addEventListener("submit", event => {
   event.preventDefault();
   setBusy(true);
@@ -144,6 +174,14 @@ form!.addEventListener("submit", event => {
     })
     .finally(() => setBusy(false));
 });
+
+for (const checkbox of [startWithWindowsCheck!, startMinimizedCheck!, autoConnectCheck!, autoRetryObsCheck!]) {
+  checkbox.addEventListener("change", () => {
+    saveSettings().catch(() => {
+      // Non-critical, ignore
+    });
+  });
+}
 
 connectButton!.addEventListener("click", () => {
   setBusy(true);
@@ -229,6 +267,19 @@ installUpdateButton!.addEventListener("click", () => {
     });
 });
 
+// Tray actions forwarded from main process (connect/disconnect triggered from tray menu)
+window.balkonAgent.onTrayAction(action => {
+  if (action === "connect") {
+    window.balkonAgent.connect(readForm())
+      .then(renderState)
+      .catch(() => { /* silent */ });
+  } else if (action === "disconnect") {
+    window.balkonAgent.disconnect()
+      .then(renderState)
+      .catch(() => { /* silent */ });
+  }
+});
+
 window.balkonAgent.onStateChange(renderState);
 window.balkonAgent.onLog(addLog);
 window.balkonAgent.onUpdateState(renderUpdateState);
@@ -236,3 +287,7 @@ window.balkonAgent.onUpdateState(renderUpdateState);
 window.balkonAgent.loadConfig()
   .then(writeForm)
   .catch(() => writeForm(DEFAULT_CONFIG));
+
+window.balkonAgent.loadSettings()
+  .then(writeSettings)
+  .catch(() => writeSettings(DEFAULT_SETTINGS));
