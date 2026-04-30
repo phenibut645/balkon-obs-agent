@@ -4,6 +4,7 @@ import {
   AgentState,
   LogEntry,
   ObsMediaAction,
+  ObsRelayMediaShowPayload,
   ObsRelayCommandMessage,
   ObsRelayCommandResultMessage,
   ObsRelayErrorMessage,
@@ -45,6 +46,15 @@ function getBooleanPayload(payload: Record<string, unknown> | undefined, fieldNa
   const value = payload?.[fieldName];
   if (typeof value !== "boolean") {
     throw new Error(`Missing required boolean field '${fieldName}'.`);
+  }
+
+  return value;
+}
+
+function getNumberPayload(payload: Record<string, unknown> | undefined, fieldName: string): number {
+  const value = payload?.[fieldName];
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`Missing required number field '${fieldName}'.`);
   }
 
   return value;
@@ -343,6 +353,15 @@ export class RelayClient {
         const mediaAction = getStringPayload(message.payload, "mediaAction") as ObsMediaAction;
         await this.obsClient.triggerMediaInputAction(config, inputName, mediaAction);
         return {};
+      }
+      case "obs.media.show": {
+        const mediaPayload: ObsRelayMediaShowPayload = {
+          kind: getStringPayload(message.payload, "kind") as "image" | "gif",
+          url: getStringPayload(message.payload, "url"),
+          durationMs: getNumberPayload(message.payload, "durationMs"),
+          title: getStringPayload(message.payload, "title"),
+        };
+        return this.obsClient.showMediaOverlay(config, mediaPayload);
       }
       default:
         throw new Error(`Unsupported relay command '${message.command}'.`);

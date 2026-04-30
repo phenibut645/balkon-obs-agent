@@ -2,11 +2,31 @@ import OBSWebSocket from "obs-websocket-js";
 import {
   AgentConfig,
   ObsMediaAction,
+  ObsRelayMediaShowPayload,
   ObsRelayGetStatusResult,
   ObsRelaySceneItem,
   ObsRelaySceneView,
   ObsTestResult,
 } from "../shared/types.js";
+
+const MEDIA_OVERLAY_SOURCE_NAME = "Balkon Media Overlay";
+
+interface ObsInputEntry {
+  inputName?: string | null;
+  inputKind?: string | null;
+}
+
+interface ObsInputListResponse {
+  inputs?: ObsInputEntry[];
+}
+
+interface ObsCreateInputResponse {
+  sceneItemId?: number;
+}
+
+interface ObsGetSceneItemIdResponse {
+  sceneItemId?: number;
+}
 
 interface ObsVersionResponse {
   obsVersion?: string | null;
@@ -46,6 +66,7 @@ export class ObsClient {
   private connectedPassword: string | null = null;
   private lastObsVersion: string | null = null;
   private lastWebsocketVersion: string | null = null;
+  private mediaQueue: Promise<void> = Promise.resolve();
 
   async test(config: AgentConfig): Promise<ObsTestResult> {
     try {
@@ -152,6 +173,39 @@ export class ObsClient {
     await this.obs.call("TriggerMediaInputAction", { inputName, mediaAction });
   }
 
+  async showMediaOverlay(config: AgentConfig, media: ObsRelayMediaShowPayload): Promise<{ ok: true }> {
+    return this.enqueueMediaTask(async () => {
+      this.validateMediaPayload(media);
+      await this.ensureConnected(config);
+
+      const currentScene = await this.obs.call("GetCurrentProgramScene") as ObsCurrentProgramSceneResponse;
+      const sceneName = String(currentScene.currentProgramSceneName ?? "").trim();
+      if (!sceneName) {
+        throw new Error("OBS_MEDIA_SHOW_FAILED: Current program scene is not available.");
+      }
+
+      const sceneItemId = await this.ensureMediaOverlaySceneItem(sceneName, media.url);
+
+      await this.obs.call("SetSceneItemEnabled", {
+        sceneName,
+        sceneItemId,
+        sceneItemEnabled: true,
+      });
+
+      try {
+        await this.sleep(media.durationMs);
+      } finally {
+        await this.obs.call("SetSceneItemEnabled", {
+          sceneName,
+          sceneItemId,
+          sceneItemEnabled: false,
+        });
+      }
+
+      return { ok: true };
+    });
+  }
+
   async disconnect(): Promise<void> {
     if (!this.connected) {
       return;
@@ -189,5 +243,99 @@ export class ObsClient {
     this.connectedUrl = config.obsUrl;
     this.connectedPassword = passwordKey;
     this.lastWebsocketVersion = result.obsWebSocketVersion ?? null;
+  }
+
+  private async enqueueMediaTask(task: () => Promise<{ ok: true }>): Promise<{ ok: true }> {
+    const runTask = async () => task();
+    const queuedTask = this.mediaQueue.then(runTask, runTask);
+    this.mediaQueue = queuedTask.then(() => undefined, () => undefined);
+    return queuedTask;
+  }
+
+  private validateMediaPayload(media: ObsRelayMediaShowPayload): void {
+    if (media.kind !== "image" && media.kind !== "gif") {
+      throw new Error("OBS_MEDIA_SHOW_FAILED: Unsupported media kind.");
+    }
+
+    if (!/^https?:\/\//i.test(media.url.trim())) {
+      throw new Error("OBS_MEDIA_SHOW_FAILED: Media URL must start with http:// or https://.");
+    }
+
+    if (!Number.isFinite(media.durationMs) || media.durationMs < 1000 || media.durationMs > 15000) {
+      throw new Error("OBS_MEDIA_SHOW_FAILED: durationMs must be between 1000 and 15000.");
+    }
+  }
+
+  private async ensureMediaOverlaySceneItem(sceneName: string, mediaUrl: string): Promise<number> {
+    const [inputList, existingSceneItemId] = await Promise.all([
+      this.obs.call("GetInputList") as Promise<ObsInputListResponse>,
+      this.findSceneItemId(sceneName, MEDIA_OVERLAY_SOURCE_NAME),
+    ]);
+
+    const inputExists = (inputList.inputs ?? []).some(input => String(input.inputName ?? "") === MEDIA_OVERLAY_SOURCE_NAME);
+
+    if (!inputExists) {
+      const created = await this.obs.call("CreateInput", {
+        sceneName,
+        inputName: MEDIA_OVERLAY_SOURCE_NAME,
+        inputKind: "browser_source",
+        inputSettings: this.getMediaOverlaySettings(mediaUrl),
+        sceneItemEnabled: false,
+      }) as ObsCreateInputResponse;
+
+      return Number(created.sceneItemId ?? NaN);
+    }
+
+    await this.obs.call("SetInputSettings", {
+      inputName: MEDIA_OVERLAY_SOURCE_NAME,
+      inputSettings: this.getMediaOverlaySettings(mediaUrl),
+      overlay: true,
+    });
+
+    if (existingSceneItemId !== null) {
+      return existingSceneItemId;
+    }
+
+    const createdSceneItem = await this.obs.call("CreateSceneItem", {
+      sceneName,
+      sourceName: MEDIA_OVERLAY_SOURCE_NAME,
+      sceneItemEnabled: false,
+    }) as ObsCreateInputResponse;
+
+    return Number(createdSceneItem.sceneItemId ?? NaN);
+  }
+
+  private async findSceneItemId(sceneName: string, sourceName: string): Promise<number | null> {
+    try {
+      const result = await this.obs.call("GetSceneItemId", {
+        sceneName,
+        sourceName,
+      }) as ObsGetSceneItemIdResponse;
+
+      const sceneItemId = Number(result.sceneItemId ?? NaN);
+      return Number.isFinite(sceneItemId) ? sceneItemId : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private getMediaOverlaySettings(url: string): {
+    url: string;
+    width: number;
+    height: number;
+    shutdown: boolean;
+    restart_when_active: boolean;
+  } {
+    return {
+      url,
+      width: 800,
+      height: 450,
+      shutdown: true,
+      restart_when_active: true,
+    };
+  }
+
+  private async sleep(durationMs: number): Promise<void> {
+    await new Promise(resolve => setTimeout(resolve, durationMs));
   }
 }
