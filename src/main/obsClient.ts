@@ -1,6 +1,7 @@
 import OBSWebSocket from "obs-websocket-js";
 import {
   AgentConfig,
+  LogEntry,
   ObsMediaAction,
   ObsRelayMediaShowPayload,
   ObsRelayGetStatusResult,
@@ -9,7 +10,10 @@ import {
   ObsTestResult,
 } from "../shared/types.js";
 
-const MEDIA_OVERLAY_SOURCE_NAME = "Balkon Media Overlay";
+const MEDIA_GROUP_NAME = "Balkon Media Group";
+const MEDIA_IMAGE_SOURCE_NAME = "Balkon Media Image";
+const MEDIA_GIF_SOURCE_NAME = "Balkon Media GIF";
+const MEDIA_DEFAULT_URL = "about:blank";
 
 interface ObsInputEntry {
   inputName?: string | null;
@@ -61,12 +65,17 @@ interface ObsConnectResponse {
 
 export class ObsClient {
   private obs = new OBSWebSocket();
+  private readonly logFn?: (level: LogEntry["level"], message: string) => void;
   private connected = false;
   private connectedUrl: string | null = null;
   private connectedPassword: string | null = null;
   private lastObsVersion: string | null = null;
   private lastWebsocketVersion: string | null = null;
   private mediaQueue: Promise<void> = Promise.resolve();
+
+  constructor(logFn?: (level: LogEntry["level"], message: string) => void) {
+    this.logFn = logFn;
+  }
 
   async test(config: AgentConfig): Promise<ObsTestResult> {
     try {
@@ -184,20 +193,38 @@ export class ObsClient {
         throw new Error("OBS_MEDIA_SHOW_FAILED: Current program scene is not available.");
       }
 
-      const sceneItemId = await this.ensureMediaOverlaySceneItem(sceneName, media.url);
+      const setup = await this.ensureMediaOverlaySetup(sceneName);
+      const sourceName = media.kind === "gif" ? MEDIA_GIF_SOURCE_NAME : MEDIA_IMAGE_SOURCE_NAME;
+      const targetSceneItemId = media.kind === "gif" ? setup.gifSceneItemId : setup.imageSceneItemId;
+      const otherSceneItemId = media.kind === "gif" ? setup.imageSceneItemId : setup.gifSceneItemId;
+
+      await this.obs.call("SetInputSettings", {
+        inputName: sourceName,
+        inputSettings: this.getMediaOverlaySettings(media.url),
+        overlay: true,
+      });
 
       await this.obs.call("SetSceneItemEnabled", {
         sceneName,
-        sceneItemId,
+        sceneItemId: otherSceneItemId,
+        sceneItemEnabled: false,
+      });
+
+      this.log("info", `Showing media source '${sourceName}' in scene '${sceneName}'.`);
+
+      await this.obs.call("SetSceneItemEnabled", {
+        sceneName,
+        sceneItemId: targetSceneItemId,
         sceneItemEnabled: true,
       });
 
       try {
         await this.sleep(media.durationMs);
       } finally {
+        this.log("info", `Hiding media source '${sourceName}' in scene '${sceneName}'.`);
         await this.obs.call("SetSceneItemEnabled", {
           sceneName,
-          sceneItemId,
+          sceneItemId: targetSceneItemId,
           sceneItemEnabled: false,
         });
       }
@@ -243,6 +270,8 @@ export class ObsClient {
     this.connectedUrl = config.obsUrl;
     this.connectedPassword = passwordKey;
     this.lastWebsocketVersion = result.obsWebSocketVersion ?? null;
+
+    await this.ensureMediaOverlaySetupForCurrentScene();
   }
 
   private async enqueueMediaTask(task: () => Promise<{ ok: true }>): Promise<{ ok: true }> {
@@ -266,43 +295,75 @@ export class ObsClient {
     }
   }
 
-  private async ensureMediaOverlaySceneItem(sceneName: string, mediaUrl: string): Promise<number> {
+  private async ensureMediaOverlaySetupForCurrentScene(): Promise<void> {
+    const currentScene = await this.obs.call("GetCurrentProgramScene") as ObsCurrentProgramSceneResponse;
+    const sceneName = String(currentScene.currentProgramSceneName ?? "").trim();
+    if (!sceneName) {
+      return;
+    }
+
+    await this.ensureMediaOverlaySetup(sceneName);
+  }
+
+  private async ensureMediaOverlaySetup(sceneName: string): Promise<{ imageSceneItemId: number; gifSceneItemId: number }> {
+    const image = await this.ensureMediaBrowserSource(sceneName, MEDIA_IMAGE_SOURCE_NAME);
+    const gif = await this.ensureMediaBrowserSource(sceneName, MEDIA_GIF_SOURCE_NAME);
+    this.log("info", `Media overlay setup ensured in scene '${sceneName}' (group '${MEDIA_GROUP_NAME}' is TODO).`);
+    return {
+      imageSceneItemId: image.sceneItemId,
+      gifSceneItemId: gif.sceneItemId,
+    };
+  }
+
+  private async ensureMediaBrowserSource(sceneName: string, sourceName: string): Promise<{ sceneItemId: number }> {
     const [inputList, existingSceneItemId] = await Promise.all([
       this.obs.call("GetInputList") as Promise<ObsInputListResponse>,
-      this.findSceneItemId(sceneName, MEDIA_OVERLAY_SOURCE_NAME),
+      this.findSceneItemId(sceneName, sourceName),
     ]);
 
-    const inputExists = (inputList.inputs ?? []).some(input => String(input.inputName ?? "") === MEDIA_OVERLAY_SOURCE_NAME);
+    const inputExists = (inputList.inputs ?? []).some(input => String(input.inputName ?? "") === sourceName);
 
     if (!inputExists) {
       const created = await this.obs.call("CreateInput", {
         sceneName,
-        inputName: MEDIA_OVERLAY_SOURCE_NAME,
+        inputName: sourceName,
         inputKind: "browser_source",
-        inputSettings: this.getMediaOverlaySettings(mediaUrl),
+        inputSettings: this.getMediaOverlaySettings(MEDIA_DEFAULT_URL),
         sceneItemEnabled: false,
       }) as ObsCreateInputResponse;
 
-      return Number(created.sceneItemId ?? NaN);
+      const createdSceneItemId = Number(created.sceneItemId ?? NaN);
+      if (!Number.isFinite(createdSceneItemId)) {
+        throw new Error(`OBS_MEDIA_SETUP_FAILED: Unable to create source '${sourceName}'.`);
+      }
+
+      this.log("info", `${sourceName} created.`);
+      return { sceneItemId: createdSceneItemId };
     }
 
-    await this.obs.call("SetInputSettings", {
-      inputName: MEDIA_OVERLAY_SOURCE_NAME,
-      inputSettings: this.getMediaOverlaySettings(mediaUrl),
-      overlay: true,
-    });
+    this.log("info", `${sourceName} already exists.`);
 
     if (existingSceneItemId !== null) {
-      return existingSceneItemId;
+      await this.obs.call("SetSceneItemEnabled", {
+        sceneName,
+        sceneItemId: existingSceneItemId,
+        sceneItemEnabled: false,
+      });
+      return { sceneItemId: existingSceneItemId };
     }
 
     const createdSceneItem = await this.obs.call("CreateSceneItem", {
       sceneName,
-      sourceName: MEDIA_OVERLAY_SOURCE_NAME,
+      sourceName,
       sceneItemEnabled: false,
     }) as ObsCreateInputResponse;
 
-    return Number(createdSceneItem.sceneItemId ?? NaN);
+    const createdSceneItemId = Number(createdSceneItem.sceneItemId ?? NaN);
+    if (!Number.isFinite(createdSceneItemId)) {
+      throw new Error(`OBS_MEDIA_SETUP_FAILED: Unable to place source '${sourceName}' in scene '${sceneName}'.`);
+    }
+
+    return { sceneItemId: createdSceneItemId };
   }
 
   private async findSceneItemId(sceneName: string, sourceName: string): Promise<number | null> {
@@ -337,5 +398,9 @@ export class ObsClient {
 
   private async sleep(durationMs: number): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, durationMs));
+  }
+
+  private log(level: LogEntry["level"], message: string): void {
+    this.logFn?.(level, message);
   }
 }

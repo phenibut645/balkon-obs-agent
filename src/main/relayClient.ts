@@ -61,7 +61,7 @@ function getNumberPayload(payload: Record<string, unknown> | undefined, fieldNam
 }
 
 export class RelayClient {
-  private readonly obsClient = new ObsClient();
+  private readonly obsClient: ObsClient;
   private socket: WebSocket | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private manualDisconnect = true;
@@ -79,6 +79,12 @@ export class RelayClient {
   private autoRetryObs = true;
   private obsRetryTimer: NodeJS.Timeout | null = null;
   private obsRetryLogged = false;
+
+  constructor() {
+    this.obsClient = new ObsClient((level, message) => {
+      this.log(level, message);
+    });
+  }
 
   onState(listener: StateListener): () => void {
     this.stateListeners.add(listener);
