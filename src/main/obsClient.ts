@@ -28,6 +28,10 @@ interface ObsCreateInputResponse {
   sceneItemId?: number;
 }
 
+interface ObsCreateSceneResponse {
+  sceneUuid?: string;
+}
+
 interface ObsGetSceneItemIdResponse {
   sceneItemId?: number;
 }
@@ -35,6 +39,7 @@ interface ObsGetSceneItemIdResponse {
 interface ObsVersionResponse {
   obsVersion?: string | null;
   obsWebSocketVersion?: string | null;
+  availableRequests?: string[] | null;
 }
 
 interface ObsCurrentProgramSceneResponse {
@@ -59,8 +64,20 @@ interface ObsSceneItemListResponse {
   sceneItems?: ObsSceneItemEntry[];
 }
 
+interface ObsGroupListResponse {
+  groups?: string[];
+}
+
 interface ObsConnectResponse {
   obsWebSocketVersion?: string | null;
+}
+
+interface ObsMediaOverlaySetup {
+  imageSceneItemId: number;
+  gifSceneItemId: number;
+  visibilitySceneName: string;
+  grouped: boolean;
+  groupSceneItemId: number | null;
 }
 
 export class ObsClient {
@@ -204,16 +221,24 @@ export class ObsClient {
         overlay: true,
       });
 
+      if (setup.grouped && setup.groupSceneItemId !== null) {
+        await this.obs.call("SetSceneItemEnabled", {
+          sceneName,
+          sceneItemId: setup.groupSceneItemId,
+          sceneItemEnabled: true,
+        });
+      }
+
       await this.obs.call("SetSceneItemEnabled", {
-        sceneName,
+        sceneName: setup.visibilitySceneName,
         sceneItemId: otherSceneItemId,
         sceneItemEnabled: false,
       });
 
-      this.log("info", `Showing media source '${sourceName}' in scene '${sceneName}'.`);
+      this.log("info", `Showing media source '${sourceName}' in ${setup.grouped ? `group '${MEDIA_GROUP_NAME}'` : `scene '${sceneName}'`}.`);
 
       await this.obs.call("SetSceneItemEnabled", {
-        sceneName,
+        sceneName: setup.visibilitySceneName,
         sceneItemId: targetSceneItemId,
         sceneItemEnabled: true,
       });
@@ -221,9 +246,9 @@ export class ObsClient {
       try {
         await this.sleep(media.durationMs);
       } finally {
-        this.log("info", `Hiding media source '${sourceName}' in scene '${sceneName}'.`);
+        this.log("info", `Hiding media source '${sourceName}' in ${setup.grouped ? `group '${MEDIA_GROUP_NAME}'` : `scene '${sceneName}'`}.`);
         await this.obs.call("SetSceneItemEnabled", {
-          sceneName,
+          sceneName: setup.visibilitySceneName,
           sceneItemId: targetSceneItemId,
           sceneItemEnabled: false,
         });
@@ -305,14 +330,178 @@ export class ObsClient {
     await this.ensureMediaOverlaySetup(sceneName);
   }
 
-  private async ensureMediaOverlaySetup(sceneName: string): Promise<{ imageSceneItemId: number; gifSceneItemId: number }> {
+  private async ensureMediaOverlaySetup(sceneName: string): Promise<ObsMediaOverlaySetup> {
+    const availableRequests = await this.getAvailableRequests();
+    const groupedSetup = await this.tryEnsureGroupedMediaOverlaySetup(sceneName, availableRequests);
+    if (groupedSetup) {
+      this.log("info", `Using grouped media overlay in '${MEDIA_GROUP_NAME}'.`);
+      return groupedSetup;
+    }
+
+    this.log("info", "Using fallback scene media overlay.");
     const image = await this.ensureMediaBrowserSource(sceneName, MEDIA_IMAGE_SOURCE_NAME);
     const gif = await this.ensureMediaBrowserSource(sceneName, MEDIA_GIF_SOURCE_NAME);
-    this.log("info", `Media overlay setup ensured in scene '${sceneName}' (group '${MEDIA_GROUP_NAME}' is TODO).`);
     return {
       imageSceneItemId: image.sceneItemId,
       gifSceneItemId: gif.sceneItemId,
+      visibilitySceneName: sceneName,
+      grouped: false,
+      groupSceneItemId: null,
     };
+  }
+
+  private async tryEnsureGroupedMediaOverlaySetup(sceneName: string, availableRequests: Set<string>): Promise<ObsMediaOverlaySetup | null> {
+    if (!this.supportsRequests(availableRequests, "GetGroupList", "GetGroupSceneItemList", "GetSceneItemId", "CreateSceneItem")) {
+      this.log("warn", "OBS group setup is not supported by this OBS WebSocket API; using scene sources fallback.");
+      return null;
+    }
+
+    try {
+      const groupExists = await this.ensureMediaGroupExists(availableRequests);
+      if (!groupExists) {
+        this.log("warn", "OBS group setup is not supported by this OBS WebSocket API; using scene sources fallback.");
+        return null;
+      }
+
+      const groupSceneItemId = await this.ensureMediaGroupSceneItem(sceneName);
+      const image = await this.ensureMediaBrowserSourceInGroup(sceneName, MEDIA_IMAGE_SOURCE_NAME);
+      const gif = await this.ensureMediaBrowserSourceInGroup(sceneName, MEDIA_GIF_SOURCE_NAME);
+
+      return {
+        imageSceneItemId: image.sceneItemId,
+        gifSceneItemId: gif.sceneItemId,
+        visibilitySceneName: MEDIA_GROUP_NAME,
+        grouped: true,
+        groupSceneItemId,
+      };
+    } catch (error) {
+      this.log("warn", `Unable to use '${MEDIA_GROUP_NAME}' safely: ${this.formatError(error)} Using scene sources fallback.`);
+      return null;
+    }
+  }
+
+  private async ensureMediaGroupExists(availableRequests: Set<string>): Promise<boolean> {
+    const groupList = await this.obs.call("GetGroupList") as ObsGroupListResponse;
+    const groupExists = (groupList.groups ?? []).some(groupName => groupName === MEDIA_GROUP_NAME);
+    if (groupExists) {
+      this.log("info", `Media group '${MEDIA_GROUP_NAME}' exists.`);
+      return true;
+    }
+
+    if (!availableRequests.has("CreateGroup")) {
+      return false;
+    }
+
+    if (await this.tryCreateMediaGroup({ groupName: MEDIA_GROUP_NAME })) {
+      return true;
+    }
+
+    return this.tryCreateMediaGroup({ sceneName: MEDIA_GROUP_NAME });
+  }
+
+  private async tryCreateMediaGroup(requestData: Record<string, unknown>): Promise<boolean> {
+    try {
+      await this.callObsUnchecked<ObsCreateSceneResponse>("CreateGroup", requestData);
+      this.log("info", `Media group '${MEDIA_GROUP_NAME}' created.`);
+      return true;
+    } catch (error) {
+      this.log("warn", `CreateGroup did not accept media group request: ${this.formatError(error)}`);
+      return false;
+    }
+  }
+
+  private async ensureMediaGroupSceneItem(sceneName: string): Promise<number> {
+    const existingGroupSceneItemId = await this.findSceneItemId(sceneName, MEDIA_GROUP_NAME);
+    if (existingGroupSceneItemId !== null) {
+      this.log("info", `Media group '${MEDIA_GROUP_NAME}' exists in scene '${sceneName}'.`);
+      return existingGroupSceneItemId;
+    }
+
+    const createdSceneItem = await this.obs.call("CreateSceneItem", {
+      sceneName,
+      sourceName: MEDIA_GROUP_NAME,
+      sceneItemEnabled: true,
+    }) as ObsCreateInputResponse;
+
+    const createdSceneItemId = Number(createdSceneItem.sceneItemId ?? NaN);
+    if (!Number.isFinite(createdSceneItemId)) {
+      throw new Error(`OBS_MEDIA_SETUP_FAILED: Unable to place group '${MEDIA_GROUP_NAME}' in scene '${sceneName}'.`);
+    }
+
+    this.log("info", `Media group '${MEDIA_GROUP_NAME}' added to scene '${sceneName}'.`);
+    return createdSceneItemId;
+  }
+
+  private async ensureMediaBrowserSourceInGroup(sceneName: string, sourceName: string): Promise<{ sceneItemId: number }> {
+    const [inputList, existingGroupSceneItemId, existingSceneSceneItemId] = await Promise.all([
+      this.obs.call("GetInputList") as Promise<ObsInputListResponse>,
+      this.findGroupSceneItemId(sourceName),
+      this.findSceneItemId(sceneName, sourceName),
+    ]);
+
+    const inputExists = (inputList.inputs ?? []).some(input => String(input.inputName ?? "") === sourceName);
+
+    if (!inputExists) {
+      try {
+        const created = await this.obs.call("CreateInput", {
+          sceneName: MEDIA_GROUP_NAME,
+          inputName: sourceName,
+          inputKind: "browser_source",
+          inputSettings: this.getMediaOverlaySettings(MEDIA_DEFAULT_URL),
+          sceneItemEnabled: false,
+        }) as ObsCreateInputResponse;
+
+        const createdSceneItemId = Number(created.sceneItemId ?? NaN);
+        if (!Number.isFinite(createdSceneItemId)) {
+          throw new Error(`OBS_MEDIA_SETUP_FAILED: Unable to create source '${sourceName}' in group '${MEDIA_GROUP_NAME}'.`);
+        }
+
+        this.log("info", `${sourceName} created in group '${MEDIA_GROUP_NAME}'.`);
+        return { sceneItemId: createdSceneItemId };
+      } catch (error) {
+        this.log("warn", `${sourceName} could not be created in group '${MEDIA_GROUP_NAME}': ${this.formatError(error)}`);
+        throw error;
+      }
+    }
+
+    if (existingGroupSceneItemId !== null) {
+      await this.obs.call("SetSceneItemEnabled", {
+        sceneName: MEDIA_GROUP_NAME,
+        sceneItemId: existingGroupSceneItemId,
+        sceneItemEnabled: false,
+      });
+      this.log("info", `${sourceName} exists in group '${MEDIA_GROUP_NAME}'.`);
+      return { sceneItemId: existingGroupSceneItemId };
+    }
+
+    let createdSceneItemId: number;
+    try {
+      const createdSceneItem = await this.obs.call("CreateSceneItem", {
+        sceneName: MEDIA_GROUP_NAME,
+        sourceName,
+        sceneItemEnabled: false,
+      }) as ObsCreateInputResponse;
+
+      createdSceneItemId = Number(createdSceneItem.sceneItemId ?? NaN);
+      if (!Number.isFinite(createdSceneItemId)) {
+        throw new Error(`OBS_MEDIA_SETUP_FAILED: Unable to add source '${sourceName}' to group '${MEDIA_GROUP_NAME}'.`);
+      }
+    } catch (error) {
+      this.log("warn", `${sourceName} exists outside '${MEDIA_GROUP_NAME}', but adding it to the group is not supported safely: ${this.formatError(error)}`);
+      throw error;
+    }
+
+    if (existingSceneSceneItemId !== null) {
+      await this.obs.call("SetSceneItemEnabled", {
+        sceneName,
+        sceneItemId: existingSceneSceneItemId,
+        sceneItemEnabled: false,
+      });
+      this.log("info", `${sourceName} exists outside '${MEDIA_GROUP_NAME}' and was left in place hidden.`);
+    }
+
+    this.log("info", `${sourceName} added to group '${MEDIA_GROUP_NAME}'.`);
+    return { sceneItemId: createdSceneItemId };
   }
 
   private async ensureMediaBrowserSource(sceneName: string, sourceName: string): Promise<{ sceneItemId: number }> {
@@ -337,11 +526,9 @@ export class ObsClient {
         throw new Error(`OBS_MEDIA_SETUP_FAILED: Unable to create source '${sourceName}'.`);
       }
 
-      this.log("info", `${sourceName} created.`);
+      this.log("info", `${sourceName} created in scene '${sceneName}'.`);
       return { sceneItemId: createdSceneItemId };
     }
-
-    this.log("info", `${sourceName} already exists.`);
 
     if (existingSceneItemId !== null) {
       await this.obs.call("SetSceneItemEnabled", {
@@ -349,6 +536,7 @@ export class ObsClient {
         sceneItemId: existingSceneItemId,
         sceneItemEnabled: false,
       });
+      this.log("info", `${sourceName} exists in scene '${sceneName}'.`);
       return { sceneItemId: existingSceneItemId };
     }
 
@@ -363,7 +551,24 @@ export class ObsClient {
       throw new Error(`OBS_MEDIA_SETUP_FAILED: Unable to place source '${sourceName}' in scene '${sceneName}'.`);
     }
 
+    this.log("info", `${sourceName} added to scene '${sceneName}'.`);
     return { sceneItemId: createdSceneItemId };
+  }
+
+  private async getAvailableRequests(): Promise<Set<string>> {
+    const version = await this.obs.call("GetVersion") as ObsVersionResponse;
+    this.lastObsVersion = version.obsVersion ?? null;
+    this.lastWebsocketVersion = version.obsWebSocketVersion ?? this.lastWebsocketVersion;
+    return new Set(version.availableRequests ?? []);
+  }
+
+  private supportsRequests(availableRequests: Set<string>, ...requestNames: string[]): boolean {
+    return requestNames.every(requestName => availableRequests.has(requestName));
+  }
+
+  private async callObsUnchecked<T>(requestType: string, requestData?: Record<string, unknown>): Promise<T> {
+    const call = this.obs.call as unknown as (requestType: string, requestData?: Record<string, unknown>) => Promise<T>;
+    return call(requestType, requestData);
   }
 
   private async findSceneItemId(sceneName: string, sourceName: string): Promise<number | null> {
@@ -374,6 +579,20 @@ export class ObsClient {
       }) as ObsGetSceneItemIdResponse;
 
       const sceneItemId = Number(result.sceneItemId ?? NaN);
+      return Number.isFinite(sceneItemId) ? sceneItemId : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async findGroupSceneItemId(sourceName: string): Promise<number | null> {
+    try {
+      const result = await this.obs.call("GetGroupSceneItemList", {
+        sceneName: MEDIA_GROUP_NAME,
+      }) as ObsSceneItemListResponse;
+
+      const targetItem = (result.sceneItems ?? []).find(item => item.sourceName === sourceName);
+      const sceneItemId = Number(targetItem?.sceneItemId ?? NaN);
       return Number.isFinite(sceneItemId) ? sceneItemId : null;
     } catch {
       return null;
@@ -398,6 +617,10 @@ export class ObsClient {
 
   private async sleep(durationMs: number): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, durationMs));
+  }
+
+  private formatError(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 
   private log(level: LogEntry["level"], message: string): void {
