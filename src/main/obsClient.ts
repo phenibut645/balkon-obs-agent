@@ -289,23 +289,17 @@ export class ObsClient {
       }
     }
 
-    const currentTransformResponse = await this.obs.call("GetSceneItemTransform", {
+    await this.obs.call("GetSceneItemTransform", {
       sceneName,
       sceneItemId,
     }) as ObsGetSceneItemTransformResponse;
-
-    const currentTransform = currentTransformResponse.sceneItemTransform ?? {};
-    const nextTransform: Record<string, number> = {};
-    for (const [key, value] of Object.entries(currentTransform)) {
-      if (typeof value === "number" && Number.isFinite(value)) {
-        nextTransform[key] = value;
-      }
-    }
-    nextTransform.positionX = payload.transform.positionX;
-    nextTransform.positionY = payload.transform.positionY;
-    nextTransform.scaleX = payload.transform.scaleX;
-    nextTransform.scaleY = payload.transform.scaleY;
-    nextTransform.rotation = payload.transform.rotation ?? 0;
+    const nextTransform = {
+      positionX: payload.transform.positionX,
+      positionY: payload.transform.positionY,
+      scaleX: payload.transform.scaleX,
+      scaleY: payload.transform.scaleY,
+      rotation: payload.transform.rotation ?? 0,
+    };
 
     await this.obs.call("SetSceneItemTransform", {
       sceneName,
