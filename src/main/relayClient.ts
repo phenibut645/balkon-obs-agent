@@ -7,6 +7,7 @@ import {
   ObsRelayMediaShowPayload,
   ObsRelaySceneItemIndexSetPayload,
   ObsRelaySceneItemTransformSetPayload,
+  ObsRelayTextSourceCreatePayload,
   ObsRelayCommandMessage,
   ObsRelayCommandResultMessage,
   ObsRelayErrorMessage,
@@ -62,6 +63,17 @@ function getNumberPayload(payload: Record<string, unknown> | undefined, fieldNam
   return value;
 }
 
+function getOptionalNumberPayload(payload: Record<string, unknown> | undefined, fieldName: string): number | undefined {
+  const value = payload?.[fieldName];
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`Invalid number field '${fieldName}'.`);
+  }
+  return value;
+}
+
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
@@ -78,6 +90,40 @@ function getOptionalStringPayload(payload: Record<string, unknown> | undefined, 
     throw new Error(`Invalid field '${fieldName}'.`);
   }
   return value.trim();
+}
+
+function parseTextSourceCreatePayload(payload: Record<string, unknown> | undefined): ObsRelayTextSourceCreatePayload {
+  const sceneName = getStringPayload(payload, "sceneName");
+  if (sceneName.length > 160) {
+    throw new Error("sceneName must be 160 characters or fewer.");
+  }
+
+  const text = getStringPayload(payload, "text");
+  if (text.length > 500) {
+    throw new Error("text must be 500 characters or fewer.");
+  }
+
+  const sourceName = getOptionalStringPayload(payload, "sourceName");
+  if (typeof sourceName === "string" && sourceName.length > 160) {
+    throw new Error("sourceName must be 160 characters or fewer.");
+  }
+
+  const positionXRaw = getOptionalNumberPayload(payload, "positionX");
+  const positionYRaw = getOptionalNumberPayload(payload, "positionY");
+  const scaleXRaw = getOptionalNumberPayload(payload, "scaleX");
+  const scaleYRaw = getOptionalNumberPayload(payload, "scaleY");
+  const rotationRaw = getOptionalNumberPayload(payload, "rotation");
+
+  return {
+    sceneName,
+    sourceName,
+    text,
+    positionX: positionXRaw === undefined ? undefined : clampNumber(positionXRaw, -10_000, 10_000),
+    positionY: positionYRaw === undefined ? undefined : clampNumber(positionYRaw, -10_000, 10_000),
+    scaleX: scaleXRaw === undefined ? undefined : clampNumber(scaleXRaw, 0.05, 10),
+    scaleY: scaleYRaw === undefined ? undefined : clampNumber(scaleYRaw, 0.05, 10),
+    rotation: rotationRaw === undefined ? undefined : clampNumber(rotationRaw, -360, 360),
+  };
 }
 
 function parseSceneItemTransformSetPayload(payload: Record<string, unknown> | undefined): ObsRelaySceneItemTransformSetPayload {
@@ -440,6 +486,10 @@ export class RelayClient {
       case "obs.scene.item.index.set": {
         const payload = parseSceneItemIndexSetPayload(message.payload);
         return this.obsClient.setSceneItemIndexForStudio(config, payload);
+      }
+      case "obs.scene.source.text.create": {
+        const payload = parseTextSourceCreatePayload(message.payload);
+        return this.obsClient.createTextSourceForStudio(config, payload);
       }
       case "obs.switchScene": {
         const sceneName = getStringPayload(message.payload, "sceneName");

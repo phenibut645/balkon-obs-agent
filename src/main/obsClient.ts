@@ -13,6 +13,8 @@ import {
   ObsRelaySceneItemTransformSetResult,
   ObsRelaySceneItemsListResult,
   ObsRelayScenesListResult,
+  ObsRelayTextSourceCreatePayload,
+  ObsRelayTextSourceCreateResult,
   ObsRelaySceneView,
   ObsTestResult,
 } from "../shared/types.js";
@@ -21,6 +23,8 @@ const MEDIA_GROUP_NAME = "Balkon Media Group";
 const MEDIA_IMAGE_SOURCE_NAME = "Balkon Media Image";
 const MEDIA_GIF_SOURCE_NAME = "Balkon Media GIF";
 const MEDIA_DEFAULT_URL = "about:blank";
+const TEXT_SOURCE_BASE_NAME = "Balkon Text";
+const TEXT_SOURCE_KINDS = ["text_gdiplus_v2", "text_gdiplus", "text_ft2_source_v2", "text_ft2_source"] as const;
 const REQUIRED_GROUP_SETUP_REQUESTS = [
   "GetGroupList",
   "GetGroupSceneItemList",
@@ -333,6 +337,96 @@ export class ObsClient {
     };
   }
 
+  async createTextSourceForStudio(
+    config: AgentConfig,
+    payload: ObsRelayTextSourceCreatePayload,
+  ): Promise<ObsRelayTextSourceCreateResult> {
+    await this.ensureConnected(config);
+
+    const sceneName = payload.sceneName.trim();
+    if (!sceneName.length || sceneName.length > 160) {
+      throw new Error("sceneName must be a non-empty string up to 160 characters.");
+    }
+
+    const text = payload.text.trim();
+    if (!text.length || text.length > 500) {
+      throw new Error("text must be a non-empty string up to 500 characters.");
+    }
+
+    const requestedSourceName = typeof payload.sourceName === "string" ? payload.sourceName.trim() : "";
+    if (requestedSourceName.length > 160) {
+      throw new Error("sourceName must be 160 characters or fewer.");
+    }
+
+    await this.obs.call("GetSceneItemList", { sceneName }) as ObsSceneItemListResponse;
+
+    const inputList = await this.obs.call("GetInputList") as ObsInputListResponse;
+    const existingInputNames = new Set((inputList.inputs ?? [])
+      .map(input => String(input.inputName ?? "").trim())
+      .filter(Boolean));
+    const sourceName = requestedSourceName || this.generateUniqueTextSourceName(existingInputNames);
+
+    const sceneItemTransform = {
+      positionX: payload.positionX ?? 100,
+      positionY: payload.positionY ?? 100,
+      scaleX: payload.scaleX ?? 1,
+      scaleY: payload.scaleY ?? 1,
+      rotation: payload.rotation ?? 0,
+    };
+
+    let created: { sceneItemId: number; inputKind: string; sourceName: string } | null = null;
+    const creationErrors: string[] = [];
+
+    for (const inputKind of TEXT_SOURCE_KINDS) {
+      try {
+        const candidateName = existingInputNames.has(sourceName)
+          ? this.generateUniqueTextSourceName(existingInputNames)
+          : sourceName;
+        const result = await this.obs.call("CreateInput", {
+          sceneName,
+          inputName: candidateName,
+          inputKind,
+          inputSettings: { text },
+          sceneItemEnabled: true,
+        }) as ObsCreateInputResponse;
+
+        const sceneItemId = Number(result.sceneItemId ?? NaN);
+        if (!Number.isInteger(sceneItemId) || sceneItemId <= 0) {
+          throw new Error("OBS did not return a created sceneItemId.");
+        }
+
+        existingInputNames.add(candidateName);
+        created = { sceneItemId, inputKind, sourceName: candidateName };
+        break;
+      } catch (error) {
+        creationErrors.push(`${inputKind}: ${this.formatError(error)}`);
+        this.log("warn", `CreateInput failed for text kind '${inputKind}': ${this.formatError(error)}`);
+      }
+    }
+
+    if (!created) {
+      throw new Error(`Unable to create OBS text source. Tried kinds: ${creationErrors.join("; ")}`);
+    }
+
+    await this.obs.call("SetSceneItemTransform", {
+      sceneName,
+      sceneItemId: created.sceneItemId,
+      sceneItemTransform,
+    });
+
+    const transform = await this.getSceneItemTransformSafe(sceneName, created.sceneItemId);
+    const items = await this.getSceneItemIndexList(sceneName);
+
+    return {
+      sceneName,
+      sceneItemId: created.sceneItemId,
+      sourceName: created.sourceName,
+      inputKind: created.inputKind,
+      transform,
+      items,
+    };
+  }
+
   async applySceneItemTransformForStudio(
     config: AgentConfig,
     payload: ObsRelaySceneItemTransformSetPayload,
@@ -533,6 +627,37 @@ export class ObsClient {
     this.lastWebsocketVersion = result.obsWebSocketVersion ?? null;
 
     await this.ensureMediaOverlaySetupForCurrentScene();
+  }
+
+  private generateUniqueTextSourceName(existingInputNames: Set<string>): string {
+    if (!existingInputNames.has(TEXT_SOURCE_BASE_NAME)) {
+      return TEXT_SOURCE_BASE_NAME;
+    }
+
+    for (let i = 2; i < 10_000; i += 1) {
+      const candidate = `${TEXT_SOURCE_BASE_NAME} ${i}`;
+      if (!existingInputNames.has(candidate)) {
+        return candidate;
+      }
+    }
+
+    return `${TEXT_SOURCE_BASE_NAME} ${Date.now()}`;
+  }
+
+  private async getSceneItemIndexList(sceneName: string): Promise<Array<{ sceneItemId: number; sourceName: string; sceneItemIndex: number }>> {
+    const result = await this.obs.call("GetSceneItemList", { sceneName }) as ObsSceneItemListResponse;
+    return (result.sceneItems ?? [])
+      .map((item, index) => ({
+        sceneItemId: Number(item.sceneItemId ?? NaN),
+        sourceName: String(item.sourceName ?? "").trim(),
+        sceneItemIndex: Number(item.sceneItemIndex ?? index),
+      }))
+      .filter(item => Number.isInteger(item.sceneItemId) && item.sceneItemId > 0 && item.sourceName.length > 0)
+      .map(item => ({
+        sceneItemId: item.sceneItemId,
+        sourceName: item.sourceName,
+        sceneItemIndex: Number.isInteger(item.sceneItemIndex) && item.sceneItemIndex >= 0 ? item.sceneItemIndex : 0,
+      }));
   }
 
   private async getSceneItemTransformSafe(sceneName: string, sceneItemId: number): Promise<{
