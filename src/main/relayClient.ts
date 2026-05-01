@@ -5,6 +5,7 @@ import {
   LogEntry,
   ObsMediaAction,
   ObsRelayMediaShowPayload,
+  ObsRelaySceneItemIndexSetPayload,
   ObsRelaySceneItemTransformSetPayload,
   ObsRelayCommandMessage,
   ObsRelayCommandResultMessage,
@@ -118,6 +119,35 @@ function parseSceneItemTransformSetPayload(payload: Record<string, unknown> | un
       scaleY,
       rotation,
     },
+  };
+}
+
+function parseSceneItemIndexSetPayload(payload: Record<string, unknown> | undefined): ObsRelaySceneItemIndexSetPayload {
+  const sceneName = getStringPayload(payload, "sceneName");
+  if (sceneName.length > 160) {
+    throw new Error("sceneName must be 160 characters or fewer.");
+  }
+
+  const sceneItemIdRaw = getNumberPayload(payload, "sceneItemId");
+  if (!Number.isInteger(sceneItemIdRaw) || sceneItemIdRaw <= 0) {
+    throw new Error("sceneItemId must be a positive integer.");
+  }
+
+  const sceneItemIndexRaw = getNumberPayload(payload, "sceneItemIndex");
+  if (!Number.isInteger(sceneItemIndexRaw) || sceneItemIndexRaw < 0) {
+    throw new Error("sceneItemIndex must be an integer greater than or equal to 0.");
+  }
+
+  const sourceName = getOptionalStringPayload(payload, "sourceName");
+  if (typeof sourceName === "string" && sourceName.length > 0 && sourceName.length > 160) {
+    throw new Error("sourceName must be 160 characters or fewer.");
+  }
+
+  return {
+    sceneName,
+    sceneItemId: sceneItemIdRaw,
+    sourceName,
+    sceneItemIndex: sceneItemIndexRaw,
   };
 }
 
@@ -406,6 +436,10 @@ export class RelayClient {
       case "obs.scene.item.transform.set": {
         const payload = parseSceneItemTransformSetPayload(message.payload);
         return this.obsClient.applySceneItemTransformForStudio(config, payload);
+      }
+      case "obs.scene.item.index.set": {
+        const payload = parseSceneItemIndexSetPayload(message.payload);
+        return this.obsClient.setSceneItemIndexForStudio(config, payload);
       }
       case "obs.switchScene": {
         const sceneName = getStringPayload(message.payload, "sceneName");
