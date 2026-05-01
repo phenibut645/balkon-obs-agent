@@ -6,6 +6,8 @@ import {
   ObsRelayMediaShowPayload,
   ObsRelayGetStatusResult,
   ObsRelaySceneItem,
+  ObsRelaySceneItemsListResult,
+  ObsRelayScenesListResult,
   ObsRelaySceneView,
   ObsTestResult,
 } from "../shared/types.js";
@@ -14,6 +16,15 @@ const MEDIA_GROUP_NAME = "Balkon Media Group";
 const MEDIA_IMAGE_SOURCE_NAME = "Balkon Media Image";
 const MEDIA_GIF_SOURCE_NAME = "Balkon Media GIF";
 const MEDIA_DEFAULT_URL = "about:blank";
+const REQUIRED_GROUP_SETUP_REQUESTS = [
+  "GetGroupList",
+  "GetGroupSceneItemList",
+  "GetSceneItemId",
+  "CreateScene",
+  "CreateSceneItem",
+  "CreateInput",
+  "SetSceneItemEnabled",
+];
 
 interface ObsInputEntry {
   inputName?: string | null;
@@ -52,6 +63,7 @@ interface ObsSceneListEntry {
 
 interface ObsSceneListResponse {
   scenes?: ObsSceneListEntry[];
+  currentProgramSceneName?: string | null;
 }
 
 interface ObsSceneItemEntry {
@@ -62,6 +74,24 @@ interface ObsSceneItemEntry {
 
 interface ObsSceneItemListResponse {
   sceneItems?: ObsSceneItemEntry[];
+}
+
+interface ObsSceneItemTransformEntry {
+  positionX?: number | null;
+  positionY?: number | null;
+  scaleX?: number | null;
+  scaleY?: number | null;
+  rotation?: number | null;
+  width?: number | null;
+  height?: number | null;
+}
+
+interface ObsGetSceneItemTransformResponse {
+  sceneItemTransform?: ObsSceneItemTransformEntry | null;
+}
+
+interface ObsGetInputSettingsResponse {
+  inputKind?: string | null;
 }
 
 interface ObsGroupListResponse {
@@ -163,6 +193,68 @@ export class ObsClient {
         enabled: Boolean(item.sceneItemEnabled),
       }))
       .filter(item => Number.isFinite(item.sceneItemId) && item.sourceName.length > 0);
+  }
+
+  async listScenesForStudio(config: AgentConfig): Promise<ObsRelayScenesListResult> {
+    await this.ensureConnected(config);
+    const sceneList = await this.obs.call("GetSceneList") as ObsSceneListResponse;
+
+    const scenes = (sceneList.scenes ?? [])
+      .map(scene => String(scene.sceneName ?? "").trim())
+      .filter(Boolean)
+      .map(name => ({ name }));
+
+    let currentProgramSceneName: string | null = typeof sceneList.currentProgramSceneName === "string"
+      ? sceneList.currentProgramSceneName.trim() || null
+      : null;
+
+    if (!currentProgramSceneName) {
+      try {
+        const current = await this.obs.call("GetCurrentProgramScene") as ObsCurrentProgramSceneResponse;
+        currentProgramSceneName = typeof current.currentProgramSceneName === "string"
+          ? current.currentProgramSceneName.trim() || null
+          : null;
+      } catch {
+        currentProgramSceneName = null;
+      }
+    }
+
+    return { scenes, currentProgramSceneName };
+  }
+
+  async listSceneItemsForStudio(config: AgentConfig, sceneName: string): Promise<ObsRelaySceneItemsListResult> {
+    const normalizedSceneName = sceneName.trim();
+    if (!normalizedSceneName.length) {
+      throw new Error("sceneName is required.");
+    }
+
+    await this.ensureConnected(config);
+    const result = await this.obs.call("GetSceneItemList", { sceneName: normalizedSceneName }) as ObsSceneItemListResponse;
+    const items = (result.sceneItems ?? [])
+      .map(item => ({
+        sceneItemId: Number(item.sceneItemId ?? NaN),
+        sourceName: String(item.sourceName ?? "").trim(),
+        enabled: Boolean(item.sceneItemEnabled),
+      }))
+      .filter(item => Number.isFinite(item.sceneItemId) && item.sourceName.length > 0);
+
+    const enriched = await Promise.all(items.map(async item => {
+      const transform = await this.getSceneItemTransformSafe(normalizedSceneName, item.sceneItemId);
+      const inputKind = await this.getInputKindSafe(item.sourceName);
+
+      return {
+        sceneItemId: item.sceneItemId,
+        sourceName: item.sourceName,
+        inputKind,
+        enabled: item.enabled,
+        transform,
+      };
+    }));
+
+    return {
+      sceneName: normalizedSceneName,
+      items: enriched,
+    };
   }
 
   async switchScene(config: AgentConfig, sceneName: string): Promise<void> {
@@ -299,6 +391,80 @@ export class ObsClient {
     await this.ensureMediaOverlaySetupForCurrentScene();
   }
 
+  private async getSceneItemTransformSafe(sceneName: string, sceneItemId: number): Promise<{
+    positionX: number;
+    positionY: number;
+    scaleX: number;
+    scaleY: number;
+    rotation: number;
+    width?: number;
+    height?: number;
+  }> {
+    try {
+      const response = await this.obs.call("GetSceneItemTransform", {
+        sceneName,
+        sceneItemId,
+      }) as ObsGetSceneItemTransformResponse;
+
+      const t = response.sceneItemTransform ?? null;
+      const positionX = Number(t?.positionX ?? 0);
+      const positionY = Number(t?.positionY ?? 0);
+      const scaleX = Number(t?.scaleX ?? 1);
+      const scaleY = Number(t?.scaleY ?? 1);
+      const rotation = Number(t?.rotation ?? 0);
+      const width = t?.width === null || t?.width === undefined ? undefined : Number(t.width);
+      const height = t?.height === null || t?.height === undefined ? undefined : Number(t.height);
+
+      const base = {
+        positionX: Number.isFinite(positionX) ? positionX : 0,
+        positionY: Number.isFinite(positionY) ? positionY : 0,
+        scaleX: Number.isFinite(scaleX) ? scaleX : 1,
+        scaleY: Number.isFinite(scaleY) ? scaleY : 1,
+        rotation: Number.isFinite(rotation) ? rotation : 0,
+      };
+
+      const out: {
+        positionX: number;
+        positionY: number;
+        scaleX: number;
+        scaleY: number;
+        rotation: number;
+        width?: number;
+        height?: number;
+      } = { ...base };
+
+      if (width !== undefined && Number.isFinite(width)) {
+        out.width = width;
+      }
+      if (height !== undefined && Number.isFinite(height)) {
+        out.height = height;
+      }
+
+      return out;
+    } catch (error) {
+      this.log("warn", `GetSceneItemTransform failed for ${sceneName}#${sceneItemId}: ${this.formatError(error)}`);
+      return {
+        positionX: 0,
+        positionY: 0,
+        scaleX: 1,
+        scaleY: 1,
+        rotation: 0,
+      };
+    }
+  }
+
+  private async getInputKindSafe(inputName: string): Promise<string | null> {
+    try {
+      const response = await this.obs.call("GetInputSettings", { inputName }) as ObsGetInputSettingsResponse;
+      const kind = typeof response.inputKind === "string" ? response.inputKind.trim() : "";
+      return kind.length ? kind : null;
+    } catch (error) {
+      // groups/scenes can fail here; do not fail the entire command
+      this.log("warn", `GetInputSettings failed for '${inputName}': ${this.formatError(error)}`);
+      return null;
+    }
+  }
+
   private async enqueueMediaTask(task: () => Promise<{ ok: true }>): Promise<{ ok: true }> {
     const runTask = async () => task();
     const queuedTask = this.mediaQueue.then(runTask, runTask);
@@ -351,17 +517,15 @@ export class ObsClient {
   }
 
   private async tryEnsureGroupedMediaOverlaySetup(sceneName: string, availableRequests: Set<string>): Promise<ObsMediaOverlaySetup | null> {
-    if (!this.supportsRequests(availableRequests, "GetGroupList", "GetGroupSceneItemList", "GetSceneItemId", "CreateSceneItem")) {
-      this.log("warn", "OBS group setup is not supported by this OBS WebSocket API; using scene sources fallback.");
+    const missingRequests = this.getMissingRequests(availableRequests, REQUIRED_GROUP_SETUP_REQUESTS);
+    if (missingRequests.length > 0) {
+      this.logGroupSetupUnavailable(availableRequests, missingRequests);
       return null;
     }
 
     try {
-      const groupExists = await this.ensureMediaGroupExists(availableRequests);
-      if (!groupExists) {
-        this.log("warn", "OBS group setup is not supported by this OBS WebSocket API; using scene sources fallback.");
-        return null;
-      }
+      this.log("info", "OBS group API uses CreateScene with isGroup=true; CreateGroup is not required.");
+      await this.ensureMediaGroupExists();
 
       const groupSceneItemId = await this.ensureMediaGroupSceneItem(sceneName);
       const image = await this.ensureMediaBrowserSourceInGroup(sceneName, MEDIA_IMAGE_SOURCE_NAME);
@@ -380,33 +544,22 @@ export class ObsClient {
     }
   }
 
-  private async ensureMediaGroupExists(availableRequests: Set<string>): Promise<boolean> {
+  private async ensureMediaGroupExists(): Promise<void> {
     const groupList = await this.obs.call("GetGroupList") as ObsGroupListResponse;
     const groupExists = (groupList.groups ?? []).some(groupName => groupName === MEDIA_GROUP_NAME);
     if (groupExists) {
       this.log("info", `Media group '${MEDIA_GROUP_NAME}' exists.`);
-      return true;
+      return;
     }
 
-    if (!availableRequests.has("CreateGroup")) {
-      return false;
-    }
-
-    if (await this.tryCreateMediaGroup({ groupName: MEDIA_GROUP_NAME })) {
-      return true;
-    }
-
-    return this.tryCreateMediaGroup({ sceneName: MEDIA_GROUP_NAME });
-  }
-
-  private async tryCreateMediaGroup(requestData: Record<string, unknown>): Promise<boolean> {
     try {
-      await this.callObsUnchecked<ObsCreateSceneResponse>("CreateGroup", requestData);
+      await this.callObsUnchecked<ObsCreateSceneResponse>("CreateScene", {
+        sceneName: MEDIA_GROUP_NAME,
+        isGroup: true,
+      });
       this.log("info", `Media group '${MEDIA_GROUP_NAME}' created.`);
-      return true;
     } catch (error) {
-      this.log("warn", `CreateGroup did not accept media group request: ${this.formatError(error)}`);
-      return false;
+      throw new Error(`CreateScene with isGroup=true failed: ${this.formatError(error)}`);
     }
   }
 
@@ -562,12 +715,26 @@ export class ObsClient {
     return new Set(version.availableRequests ?? []);
   }
 
-  private supportsRequests(availableRequests: Set<string>, ...requestNames: string[]): boolean {
-    return requestNames.every(requestName => availableRequests.has(requestName));
+  private getMissingRequests(availableRequests: Set<string>, requestNames: string[]): string[] {
+    return requestNames.filter(requestName => !availableRequests.has(requestName));
+  }
+
+  private logGroupSetupUnavailable(availableRequests: Set<string>, missingRequests: string[]): void {
+    const missing = missingRequests.length > 0 ? missingRequests.join(", ") : "none";
+    const obsVersion = this.lastObsVersion ?? "unknown";
+    const websocketVersion = this.lastWebsocketVersion ?? "unknown";
+    this.log(
+      "warn",
+      `OBS group setup unavailable. Missing requests: ${missing}. OBS ${obsVersion}, obs-websocket ${websocketVersion}. Using scene sources fallback.`,
+    );
   }
 
   private async callObsUnchecked<T>(requestType: string, requestData?: Record<string, unknown>): Promise<T> {
-    const call = this.obs.call as unknown as (requestType: string, requestData?: Record<string, unknown>) => Promise<T>;
+    const call = this.obs.call.bind(this.obs) as unknown as (
+      requestType: string,
+      requestData?: Record<string, unknown>
+    ) => Promise<T>;
+
     return call(requestType, requestData);
   }
 

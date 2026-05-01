@@ -336,6 +336,12 @@ export class RelayClient {
         const sceneName = getStringPayload(message.payload, "sceneName");
         return this.obsClient.listSceneItems(config, sceneName);
       }
+      case "obs.scenes.list":
+        return this.obsClient.listScenesForStudio(config);
+      case "obs.scene.items.list": {
+        const sceneName = getStringPayload(message.payload, "sceneName");
+        return this.obsClient.listSceneItemsForStudio(config, sceneName);
+      }
       case "obs.switchScene": {
         const sceneName = getStringPayload(message.payload, "sceneName");
         await this.obsClient.switchScene(config, sceneName);
