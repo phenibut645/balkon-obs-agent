@@ -6,6 +6,9 @@ import {
   ObsRelayMediaShowPayload,
   ObsRelayGetStatusResult,
   ObsRelaySceneItem,
+  ObsRelaySceneItemTransform,
+  ObsRelaySceneItemTransformSetPayload,
+  ObsRelaySceneItemTransformSetResult,
   ObsRelaySceneItemsListResult,
   ObsRelayScenesListResult,
   ObsRelaySceneView,
@@ -254,6 +257,80 @@ export class ObsClient {
     return {
       sceneName: normalizedSceneName,
       items: enriched,
+    };
+  }
+
+  async applySceneItemTransformForStudio(
+    config: AgentConfig,
+    payload: ObsRelaySceneItemTransformSetPayload,
+  ): Promise<ObsRelaySceneItemTransformSetResult> {
+    await this.ensureConnected(config);
+
+    const sceneName = payload.sceneName.trim();
+    if (!sceneName.length) {
+      throw new Error("sceneName is required.");
+    }
+
+    const sceneItemId = payload.sceneItemId;
+    const sceneItems = await this.listSceneItems(config, sceneName);
+    const matchingItem = sceneItems.find(item => item.sceneItemId === sceneItemId) ?? null;
+    if (!matchingItem) {
+      throw new Error(`Scene item ${sceneItemId} was not found in scene '${sceneName}'.`);
+    }
+
+    if (payload.sourceName && payload.sourceName.trim().length > 0) {
+      const expected = payload.sourceName.trim().toLowerCase();
+      const actual = matchingItem.sourceName.trim().toLowerCase();
+      if (expected !== actual) {
+        this.log(
+          "warn",
+          `Scene item source mismatch for ${sceneName}#${sceneItemId}: expected '${payload.sourceName}', got '${matchingItem.sourceName}'. Applying transform anyway.`,
+        );
+      }
+    }
+
+    const currentTransformResponse = await this.obs.call("GetSceneItemTransform", {
+      sceneName,
+      sceneItemId,
+    }) as ObsGetSceneItemTransformResponse;
+
+    const currentTransform = currentTransformResponse.sceneItemTransform ?? {};
+    const nextTransform: Record<string, number> = {};
+    for (const [key, value] of Object.entries(currentTransform)) {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        nextTransform[key] = value;
+      }
+    }
+    nextTransform.positionX = payload.transform.positionX;
+    nextTransform.positionY = payload.transform.positionY;
+    nextTransform.scaleX = payload.transform.scaleX;
+    nextTransform.scaleY = payload.transform.scaleY;
+    nextTransform.rotation = payload.transform.rotation ?? 0;
+
+    await this.obs.call("SetSceneItemTransform", {
+      sceneName,
+      sceneItemId,
+      sceneItemTransform: nextTransform,
+    });
+
+    let finalTransform: ObsRelaySceneItemTransform;
+    try {
+      finalTransform = await this.getSceneItemTransformSafe(sceneName, sceneItemId);
+    } catch {
+      finalTransform = {
+        positionX: payload.transform.positionX,
+        positionY: payload.transform.positionY,
+        scaleX: payload.transform.scaleX,
+        scaleY: payload.transform.scaleY,
+        rotation: payload.transform.rotation ?? 0,
+      };
+    }
+
+    return {
+      sceneName,
+      sceneItemId,
+      sourceName: matchingItem.sourceName || null,
+      transform: finalTransform,
     };
   }
 

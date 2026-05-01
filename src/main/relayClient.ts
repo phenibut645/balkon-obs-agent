@@ -5,6 +5,7 @@ import {
   LogEntry,
   ObsMediaAction,
   ObsRelayMediaShowPayload,
+  ObsRelaySceneItemTransformSetPayload,
   ObsRelayCommandMessage,
   ObsRelayCommandResultMessage,
   ObsRelayErrorMessage,
@@ -58,6 +59,66 @@ function getNumberPayload(payload: Record<string, unknown> | undefined, fieldNam
   }
 
   return value;
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getOptionalStringPayload(payload: Record<string, unknown> | undefined, fieldName: string): string | null | undefined {
+  const value = payload?.[fieldName];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return null;
+  }
+  if (typeof value !== "string") {
+    throw new Error(`Invalid field '${fieldName}'.`);
+  }
+  return value.trim();
+}
+
+function parseSceneItemTransformSetPayload(payload: Record<string, unknown> | undefined): ObsRelaySceneItemTransformSetPayload {
+  const sceneName = getStringPayload(payload, "sceneName");
+  if (sceneName.length > 160) {
+    throw new Error("sceneName must be 160 characters or fewer.");
+  }
+
+  const sceneItemIdRaw = getNumberPayload(payload, "sceneItemId");
+  if (!Number.isInteger(sceneItemIdRaw) || sceneItemIdRaw <= 0) {
+    throw new Error("sceneItemId must be a positive integer.");
+  }
+
+  const transformValue = payload?.transform;
+  if (!isRecord(transformValue)) {
+    throw new Error("Missing required object field 'transform'.");
+  }
+
+  const positionX = clampNumber(getNumberPayload(transformValue, "positionX"), -10_000, 10_000);
+  const positionY = clampNumber(getNumberPayload(transformValue, "positionY"), -10_000, 10_000);
+  const scaleX = clampNumber(getNumberPayload(transformValue, "scaleX"), 0.05, 10);
+  const scaleY = clampNumber(getNumberPayload(transformValue, "scaleY"), 0.05, 10);
+  const rotationRaw = transformValue.rotation;
+  const rotation = rotationRaw === undefined ? 0 : clampNumber(getNumberPayload(transformValue, "rotation"), -360, 360);
+
+  const sourceName = getOptionalStringPayload(payload, "sourceName");
+  if (typeof sourceName === "string" && sourceName.length > 0 && sourceName.length > 160) {
+    throw new Error("sourceName must be 160 characters or fewer.");
+  }
+
+  return {
+    sceneName,
+    sceneItemId: sceneItemIdRaw,
+    sourceName,
+    transform: {
+      positionX,
+      positionY,
+      scaleX,
+      scaleY,
+      rotation,
+    },
+  };
 }
 
 export class RelayClient {
@@ -341,6 +402,10 @@ export class RelayClient {
       case "obs.scene.items.list": {
         const sceneName = getStringPayload(message.payload, "sceneName");
         return this.obsClient.listSceneItemsForStudio(config, sceneName);
+      }
+      case "obs.scene.item.transform.set": {
+        const payload = parseSceneItemTransformSetPayload(message.payload);
+        return this.obsClient.applySceneItemTransformForStudio(config, payload);
       }
       case "obs.switchScene": {
         const sceneName = getStringPayload(message.payload, "sceneName");
