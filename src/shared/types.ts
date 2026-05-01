@@ -96,6 +96,7 @@ export type ObsRelayCommandName =
   | "obs.scene.item.transform.set"
   | "obs.scene.item.index.set"
   | "obs.scene.source.text.create"
+  | "obs.scene.source.browser.create"
   | "obs.switchScene"
   | "obs.setSourceVisibility"
   | "obs.setTextInputText"
@@ -259,6 +260,31 @@ export interface ObsRelayTextSourceCreateResult {
   sceneItemId: number;
   sourceName: string;
   inputKind: string;
+  transform: ObsRelaySceneItemTransform;
+  items: ObsRelaySceneItemIndexListItem[];
+}
+
+export interface ObsRelayBrowserSourceCreatePayload {
+  sceneName: string;
+  sourceName?: string | null;
+  url: string;
+  width?: number;
+  height?: number;
+  positionX?: number;
+  positionY?: number;
+  scaleX?: number;
+  scaleY?: number;
+  rotation?: number;
+}
+
+export interface ObsRelayBrowserSourceCreateResult {
+  sceneName: string;
+  sceneItemId: number;
+  sourceName: string;
+  inputKind: "browser_source";
+  url: string;
+  width: number;
+  height: number;
   transform: ObsRelaySceneItemTransform;
   items: ObsRelaySceneItemIndexListItem[];
 }

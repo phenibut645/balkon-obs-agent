@@ -8,6 +8,7 @@ import {
   ObsRelaySceneItemIndexSetPayload,
   ObsRelaySceneItemTransformSetPayload,
   ObsRelayTextSourceCreatePayload,
+  ObsRelayBrowserSourceCreatePayload,
   ObsRelayCommandMessage,
   ObsRelayCommandResultMessage,
   ObsRelayErrorMessage,
@@ -118,6 +119,47 @@ function parseTextSourceCreatePayload(payload: Record<string, unknown> | undefin
     sceneName,
     sourceName,
     text,
+    positionX: positionXRaw === undefined ? undefined : clampNumber(positionXRaw, -10_000, 10_000),
+    positionY: positionYRaw === undefined ? undefined : clampNumber(positionYRaw, -10_000, 10_000),
+    scaleX: scaleXRaw === undefined ? undefined : clampNumber(scaleXRaw, 0.05, 10),
+    scaleY: scaleYRaw === undefined ? undefined : clampNumber(scaleYRaw, 0.05, 10),
+    rotation: rotationRaw === undefined ? undefined : clampNumber(rotationRaw, -360, 360),
+  };
+}
+
+function parseBrowserSourceCreatePayload(payload: Record<string, unknown> | undefined): ObsRelayBrowserSourceCreatePayload {
+  const sceneName = getStringPayload(payload, "sceneName");
+  if (sceneName.length > 160) {
+    throw new Error("sceneName must be 160 characters or fewer.");
+  }
+
+  const url = getStringPayload(payload, "url");
+  if (url.length > 1000) {
+    throw new Error("url must be 1000 characters or fewer.");
+  }
+  if (!/^https?:\/\//i.test(url)) {
+    throw new Error("url must be a valid http:// or https:// URL.");
+  }
+
+  const sourceName = getOptionalStringPayload(payload, "sourceName");
+  if (typeof sourceName === "string" && sourceName.length > 160) {
+    throw new Error("sourceName must be 160 characters or fewer.");
+  }
+
+  const widthRaw = getOptionalNumberPayload(payload, "width");
+  const heightRaw = getOptionalNumberPayload(payload, "height");
+  const positionXRaw = getOptionalNumberPayload(payload, "positionX");
+  const positionYRaw = getOptionalNumberPayload(payload, "positionY");
+  const scaleXRaw = getOptionalNumberPayload(payload, "scaleX");
+  const scaleYRaw = getOptionalNumberPayload(payload, "scaleY");
+  const rotationRaw = getOptionalNumberPayload(payload, "rotation");
+
+  return {
+    sceneName,
+    sourceName,
+    url,
+    width: widthRaw === undefined ? undefined : clampNumber(Math.round(widthRaw), 64, 3840),
+    height: heightRaw === undefined ? undefined : clampNumber(Math.round(heightRaw), 64, 2160),
     positionX: positionXRaw === undefined ? undefined : clampNumber(positionXRaw, -10_000, 10_000),
     positionY: positionYRaw === undefined ? undefined : clampNumber(positionYRaw, -10_000, 10_000),
     scaleX: scaleXRaw === undefined ? undefined : clampNumber(scaleXRaw, 0.05, 10),
@@ -490,6 +532,10 @@ export class RelayClient {
       case "obs.scene.source.text.create": {
         const payload = parseTextSourceCreatePayload(message.payload);
         return this.obsClient.createTextSourceForStudio(config, payload);
+      }
+      case "obs.scene.source.browser.create": {
+        const payload = parseBrowserSourceCreatePayload(message.payload);
+        return this.obsClient.createBrowserSourceForStudio(config, payload);
       }
       case "obs.switchScene": {
         const sceneName = getStringPayload(message.payload, "sceneName");

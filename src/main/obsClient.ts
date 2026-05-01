@@ -15,6 +15,8 @@ import {
   ObsRelayScenesListResult,
   ObsRelayTextSourceCreatePayload,
   ObsRelayTextSourceCreateResult,
+  ObsRelayBrowserSourceCreatePayload,
+  ObsRelayBrowserSourceCreateResult,
   ObsRelaySceneView,
   ObsTestResult,
 } from "../shared/types.js";
@@ -25,6 +27,8 @@ const MEDIA_GIF_SOURCE_NAME = "Balkon Media GIF";
 const MEDIA_DEFAULT_URL = "about:blank";
 const TEXT_SOURCE_BASE_NAME = "Balkon Text";
 const TEXT_SOURCE_KINDS = ["text_gdiplus_v2", "text_gdiplus", "text_ft2_source_v2", "text_ft2_source"] as const;
+const BROWSER_SOURCE_BASE_NAME = "Balkon Browser";
+const BROWSER_SOURCE_KIND = "browser_source";
 const REQUIRED_GROUP_SETUP_REQUESTS = [
   "GetGroupList",
   "GetGroupSceneItemList",
@@ -427,6 +431,149 @@ export class ObsClient {
     };
   }
 
+  async createBrowserSourceForStudio(
+    config: AgentConfig,
+    payload: ObsRelayBrowserSourceCreatePayload,
+  ): Promise<ObsRelayBrowserSourceCreateResult> {
+    await this.ensureConnected(config);
+
+    const sceneName = payload.sceneName.trim();
+    if (!sceneName.length || sceneName.length > 160) {
+      throw new Error("sceneName must be a non-empty string up to 160 characters.");
+    }
+
+    const url = payload.url.trim();
+    if (!url.length || url.length > 1000) {
+      throw new Error("url must be a non-empty string up to 1000 characters.");
+    }
+    if (!/^https?:\/\//i.test(url)) {
+      throw new Error("url must be a valid http:// or https:// URL.");
+    }
+
+    const requestedSourceName = typeof payload.sourceName === "string" ? payload.sourceName.trim() : "";
+    if (requestedSourceName.length > 160) {
+      throw new Error("sourceName must be 160 characters or fewer.");
+    }
+
+    // Validate and clamp width/height
+    const widthRaw = payload.width === undefined ? 800 : Number(payload.width);
+    const heightRaw = payload.height === undefined ? 450 : Number(payload.height);
+    if (!Number.isFinite(widthRaw) || !Number.isFinite(heightRaw)) {
+      throw new Error("width and height must be finite numbers.");
+    }
+    const width = Math.min(3840, Math.max(64, Math.round(widthRaw)));
+    const height = Math.min(2160, Math.max(64, Math.round(heightRaw)));
+
+    // Validate and clamp transform values
+    const positionXRaw = payload.positionX === undefined ? 100 : Number(payload.positionX);
+    const positionYRaw = payload.positionY === undefined ? 100 : Number(payload.positionY);
+    const scaleXRaw = payload.scaleX === undefined ? 1 : Number(payload.scaleX);
+    const scaleYRaw = payload.scaleY === undefined ? 1 : Number(payload.scaleY);
+    const rotationRaw = payload.rotation === undefined ? 0 : Number(payload.rotation);
+
+    if (!Number.isFinite(positionXRaw) || !Number.isFinite(positionYRaw) ||
+        !Number.isFinite(scaleXRaw) || !Number.isFinite(scaleYRaw) || !Number.isFinite(rotationRaw)) {
+      throw new Error("position, scale, and rotation fields must be finite numbers.");
+    }
+
+    const sceneItemTransform = {
+      positionX: Math.min(10000, Math.max(-10000, positionXRaw)),
+      positionY: Math.min(10000, Math.max(-10000, positionYRaw)),
+      scaleX: Math.min(10, Math.max(0.05, scaleXRaw)),
+      scaleY: Math.min(10, Math.max(0.05, scaleYRaw)),
+      rotation: Math.min(360, Math.max(-360, rotationRaw)),
+    };
+
+    // Verify scene exists
+    await this.obs.call("GetSceneItemList", { sceneName }) as ObsSceneItemListResponse;
+
+    // Get existing input names to avoid duplicates
+    const inputList = await this.obs.call("GetInputList") as ObsInputListResponse;
+    const existingInputNames = new Set((inputList.inputs ?? [])
+      .map(input => String(input.inputName ?? "").trim())
+      .filter(Boolean));
+
+    // Determine final source name
+    let finalSourceName = requestedSourceName || this.generateUniqueBrowserSourceName(existingInputNames);
+
+    // Create the browser source
+    let createdSceneItemId: number | null = null;
+    let creationAttempt = 0;
+    const maxAttempts = 3;
+
+    while (creationAttempt < maxAttempts && createdSceneItemId === null) {
+      creationAttempt++;
+      try {
+        // If name exists, generate a new unique name
+        if (existingInputNames.has(finalSourceName)) {
+          finalSourceName = this.generateUniqueBrowserSourceName(existingInputNames);
+        }
+
+        const result = await this.obs.call("CreateInput", {
+          sceneName,
+          inputName: finalSourceName,
+          inputKind: BROWSER_SOURCE_KIND,
+          inputSettings: {
+            url,
+            width,
+            height,
+          },
+          sceneItemEnabled: true,
+        }) as ObsCreateInputResponse;
+
+        const sceneItemId = Number(result.sceneItemId ?? NaN);
+        if (!Number.isInteger(sceneItemId) || sceneItemId <= 0) {
+          throw new Error("OBS did not return a valid sceneItemId.");
+        }
+
+        createdSceneItemId = sceneItemId;
+        existingInputNames.add(finalSourceName);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.log("warn", `CreateInput attempt ${creationAttempt} failed: ${errorMessage}`);
+
+        if (creationAttempt >= maxAttempts) {
+          throw new Error(`Unable to create browser source after ${maxAttempts} attempts: ${errorMessage}`);
+        }
+
+        // Try with a new generated name on next iteration
+        finalSourceName = this.generateUniqueBrowserSourceName(existingInputNames);
+      }
+    }
+
+    if (createdSceneItemId === null) {
+      throw new Error("Failed to create browser source.");
+    }
+
+    // Apply transform
+    try {
+      await this.obs.call("SetSceneItemTransform", {
+        sceneName,
+        sceneItemId: createdSceneItemId,
+        sceneItemTransform,
+      });
+    } catch (error) {
+      this.log("warn", `SetSceneItemTransform failed for browser source: ${this.formatError(error)}`);
+      // Continue even if transform fails - source was created
+    }
+
+    // Get final transform and scene items list
+    const transform = await this.getSceneItemTransformSafe(sceneName, createdSceneItemId);
+    const items = await this.getSceneItemIndexList(sceneName);
+
+    return {
+      sceneName,
+      sceneItemId: createdSceneItemId,
+      sourceName: finalSourceName,
+      inputKind: BROWSER_SOURCE_KIND,
+      url,
+      width,
+      height,
+      transform,
+      items,
+    };
+  }
+
   async applySceneItemTransformForStudio(
     config: AgentConfig,
     payload: ObsRelaySceneItemTransformSetPayload,
@@ -642,6 +789,21 @@ export class ObsClient {
     }
 
     return `${TEXT_SOURCE_BASE_NAME} ${Date.now()}`;
+  }
+
+  private generateUniqueBrowserSourceName(existingInputNames: Set<string>): string {
+    if (!existingInputNames.has(BROWSER_SOURCE_BASE_NAME)) {
+      return BROWSER_SOURCE_BASE_NAME;
+    }
+
+    for (let i = 2; i < 10_000; i += 1) {
+      const candidate = `${BROWSER_SOURCE_BASE_NAME} ${i}`;
+      if (!existingInputNames.has(candidate)) {
+        return candidate;
+      }
+    }
+
+    return `${BROWSER_SOURCE_BASE_NAME} ${Date.now()}`;
   }
 
   private async getSceneItemIndexList(sceneName: string): Promise<Array<{ sceneItemId: number; sourceName: string; sceneItemIndex: number }>> {
