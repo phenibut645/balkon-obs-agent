@@ -98,6 +98,8 @@ export const SUPPORTED_RELAY_COMMANDS: RelayCommandDescriptor[] = [
   },
 ];
 
+export const SUPPORTED_RELAY_COMMAND_NAMES = SUPPORTED_RELAY_COMMANDS.map(entry => entry.command);
+
 export const SUPPORTED_RELAY_COMMAND_NAME_SET: ReadonlySet<ObsRelayCommandName | string> = new Set(
-  SUPPORTED_RELAY_COMMANDS.map(entry => entry.command),
+  SUPPORTED_RELAY_COMMAND_NAMES,
 );

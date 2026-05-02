@@ -20,11 +20,14 @@ import {
   ObsRelayHelloMessage,
   ObsRelayLegacyErrorMessage,
   ObsRelayLegacyResultMessage,
+  ObsRelayAgentMetadata,
   ObsRelayPingMessage,
   ObsRelayPongMessage,
   ObsStatus,
   RelayStatus,
 } from "../shared/types.js";
+import { AGENT_VERSION, RELAY_PROTOCOL_VERSION } from "../shared/agentMetadata.js";
+import { SUPPORTED_RELAY_COMMAND_NAMES } from "../shared/relayCommands.js";
 import { ObsClient } from "./obsClient.js";
 
 const RETRY_DELAY_MS = 3_000;
@@ -405,8 +408,7 @@ export class RelayClient {
   private readonly stateListeners = new Set<StateListener>();
   private readonly logListeners = new Set<LogListener>();
   private heartbeatTimer: NodeJS.Timeout | null = null;
-  private readonly heartbeatDebugEnabled = process.env.OBS_AGENT_DEBUG_HEARTBEAT === "1"
-    || process.env.OBS_AGENT_DEBUG_HEARTBEAT?.toLowerCase() === "true";
+  private readonly heartbeatDebugEnabled = process.env.OBS_AGENT_DEBUG_HEARTBEAT === "1" || process.env.OBS_AGENT_DEBUG_HEARTBEAT?.toLowerCase() === "true";
 
   // OBS auto-retry
   private autoRetryObs = true;
@@ -417,6 +419,18 @@ export class RelayClient {
     this.obsClient = new ObsClient((level, message) => {
       this.log(level, message);
     });
+  }
+
+  private buildAgentMetadata(): ObsRelayAgentMetadata {
+    const connection = this.obsClient.getConnectionMetadata();
+    return {
+      agentVersion: AGENT_VERSION,
+      relayProtocolVersion: RELAY_PROTOCOL_VERSION,
+      capabilities: [...SUPPORTED_RELAY_COMMAND_NAMES],
+      obsConnected: connection.obsConnected,
+      obsVersion: connection.obsVersion,
+      websocketVersion: connection.websocketVersion,
+    };
   }
 
   onState(listener: StateListener): () => void {
@@ -503,6 +517,7 @@ export class RelayClient {
           type: "hello",
           agentId: config.agentId,
           agentToken: config.agentToken,
+          metadata: this.buildAgentMetadata(),
         };
         socket.send(JSON.stringify(hello));
       });
@@ -662,7 +677,10 @@ export class RelayClient {
 
     switch (message.command) {
       case "obs.getStatus":
-        return this.obsClient.getStatus(config);
+        return {
+          ...(await this.obsClient.getStatus(config)),
+          ...this.buildAgentMetadata(),
+        };
       case "obs.listScenes":
         return this.obsClient.listScenes(config);
       case "obs.listSceneItems": {
@@ -856,6 +874,7 @@ export class RelayClient {
       const message: ObsRelayPingMessage = {
         type: "ping",
         ts: Date.now(),
+        metadata: this.buildAgentMetadata(),
       };
 
       this.sendJson(message);

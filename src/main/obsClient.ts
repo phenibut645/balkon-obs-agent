@@ -30,6 +30,7 @@ import {
   ObsRelaySceneView,
   ObsTestResult,
 } from "../shared/types.js";
+import { AGENT_VERSION, RELAY_PROTOCOL_VERSION } from "../shared/agentMetadata.js";
 
 const MEDIA_GROUP_NAME = "Balkon Media Group";
 const MEDIA_IMAGE_SOURCE_NAME = "Balkon Media Image";
@@ -154,6 +155,18 @@ export class ObsClient {
     this.logFn = logFn;
   }
 
+  getConnectionMetadata(): {
+    obsConnected: boolean;
+    obsVersion: string | null;
+    websocketVersion: string | null;
+  } {
+    return {
+      obsConnected: this.connected,
+      obsVersion: this.lastObsVersion,
+      websocketVersion: this.lastWebsocketVersion,
+    };
+  }
+
   async test(config: AgentConfig): Promise<ObsTestResult> {
     try {
       await this.ensureConnected(config);
@@ -192,6 +205,9 @@ export class ObsClient {
         endpoint: config.obsUrl,
         obsVersion: this.lastObsVersion,
         websocketVersion: this.lastWebsocketVersion,
+        agentVersion: AGENT_VERSION,
+        relayProtocolVersion: RELAY_PROTOCOL_VERSION,
+        obsConnected: true,
       };
     } catch {
       this.connected = false;
@@ -201,6 +217,9 @@ export class ObsClient {
         endpoint: config.obsUrl,
         obsVersion: this.lastObsVersion,
         websocketVersion: this.lastWebsocketVersion,
+        agentVersion: AGENT_VERSION,
+        relayProtocolVersion: RELAY_PROTOCOL_VERSION,
+        obsConnected: false,
       };
     }
   }
