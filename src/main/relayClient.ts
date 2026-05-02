@@ -7,6 +7,8 @@ import {
   ObsRelayMediaShowPayload,
   ObsRelaySceneItemIndexSetPayload,
   ObsRelaySceneItemTransformSetPayload,
+  ObsRelaySceneItemVisibilitySetPayload,
+  ObsRelaySceneItemRemovePayload,
   ObsRelayTextSourceCreatePayload,
   ObsRelayBrowserSourceCreatePayload,
   ObsRelayCommandMessage,
@@ -236,6 +238,55 @@ function parseSceneItemIndexSetPayload(payload: Record<string, unknown> | undefi
     sceneItemId: sceneItemIdRaw,
     sourceName,
     sceneItemIndex: sceneItemIndexRaw,
+  };
+}
+
+function parseSceneItemVisibilitySetPayload(payload: Record<string, unknown> | undefined): ObsRelaySceneItemVisibilitySetPayload {
+  const sceneName = getStringPayload(payload, "sceneName");
+  if (sceneName.length > 160) {
+    throw new Error("sceneName must be 160 characters or fewer.");
+  }
+
+  const sceneItemIdRaw = getNumberPayload(payload, "sceneItemId");
+  if (!Number.isInteger(sceneItemIdRaw) || sceneItemIdRaw <= 0) {
+    throw new Error("sceneItemId must be a positive integer.");
+  }
+
+  const enabled = getBooleanPayload(payload, "enabled");
+
+  const sourceName = getOptionalStringPayload(payload, "sourceName");
+  if (typeof sourceName === "string" && sourceName.length > 0 && sourceName.length > 160) {
+    throw new Error("sourceName must be 160 characters or fewer.");
+  }
+
+  return {
+    sceneName,
+    sceneItemId: sceneItemIdRaw,
+    sourceName,
+    enabled,
+  };
+}
+
+function parseSceneItemRemovePayload(payload: Record<string, unknown> | undefined): ObsRelaySceneItemRemovePayload {
+  const sceneName = getStringPayload(payload, "sceneName");
+  if (sceneName.length > 160) {
+    throw new Error("sceneName must be 160 characters or fewer.");
+  }
+
+  const sceneItemIdRaw = getNumberPayload(payload, "sceneItemId");
+  if (!Number.isInteger(sceneItemIdRaw) || sceneItemIdRaw <= 0) {
+    throw new Error("sceneItemId must be a positive integer.");
+  }
+
+  const sourceName = getOptionalStringPayload(payload, "sourceName");
+  if (typeof sourceName === "string" && sourceName.length > 0 && sourceName.length > 160) {
+    throw new Error("sourceName must be 160 characters or fewer.");
+  }
+
+  return {
+    sceneName,
+    sceneItemId: sceneItemIdRaw,
+    sourceName,
   };
 }
 
@@ -536,6 +587,14 @@ export class RelayClient {
       case "obs.scene.source.browser.create": {
         const payload = parseBrowserSourceCreatePayload(message.payload);
         return this.obsClient.createBrowserSourceForStudio(config, payload);
+      }
+      case "obs.scene.item.visibility.set": {
+        const payload = parseSceneItemVisibilitySetPayload(message.payload);
+        return this.obsClient.setSceneItemVisibilityForStudio(config, payload);
+      }
+      case "obs.scene.item.remove": {
+        const payload = parseSceneItemRemovePayload(message.payload);
+        return this.obsClient.removeSceneItemForStudio(config, payload);
       }
       case "obs.switchScene": {
         const sceneName = getStringPayload(message.payload, "sceneName");

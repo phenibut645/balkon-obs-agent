@@ -11,6 +11,10 @@ import {
   ObsRelaySceneItemTransform,
   ObsRelaySceneItemTransformSetPayload,
   ObsRelaySceneItemTransformSetResult,
+  ObsRelaySceneItemVisibilitySetPayload,
+  ObsRelaySceneItemVisibilitySetResult,
+  ObsRelaySceneItemRemovePayload,
+  ObsRelaySceneItemRemoveResult,
   ObsRelaySceneItemsListResult,
   ObsRelayScenesListResult,
   ObsRelayTextSourceCreatePayload,
@@ -571,6 +575,129 @@ export class ObsClient {
       height,
       transform,
       items,
+    };
+  }
+
+  async setSceneItemVisibilityForStudio(
+    config: AgentConfig,
+    payload: ObsRelaySceneItemVisibilitySetPayload,
+  ): Promise<ObsRelaySceneItemVisibilitySetResult> {
+    await this.ensureConnected(config);
+
+    const sceneName = payload.sceneName.trim();
+    if (!sceneName.length) {
+      throw new Error("sceneName is required.");
+    }
+
+    const sceneItemId = payload.sceneItemId;
+    if (!Number.isInteger(sceneItemId) || sceneItemId <= 0) {
+      throw new Error("sceneItemId must be a positive integer.");
+    }
+
+    const enabled = Boolean(payload.enabled);
+
+    // Fetch scene items and find the target
+    const sceneItems = await this.listSceneItems(config, sceneName);
+    const matchingItem = sceneItems.find(item => item.sceneItemId === sceneItemId) ?? null;
+    if (!matchingItem) {
+      throw new Error(`Scene item ${sceneItemId} was not found in scene '${sceneName}'.`);
+    }
+
+    // Check sourceName mismatch if provided
+    if (payload.sourceName && payload.sourceName.trim().length > 0) {
+      const expected = payload.sourceName.trim().toLowerCase();
+      const actual = matchingItem.sourceName.trim().toLowerCase();
+      if (expected !== actual) {
+        this.log(
+          "warn",
+          `Scene item source mismatch for ${sceneName}#${sceneItemId}: expected '${payload.sourceName}', got '${matchingItem.sourceName}'. Setting visibility anyway.`,
+        );
+      }
+    }
+
+    // Set visibility
+    await this.obs.call("SetSceneItemEnabled", {
+      sceneName,
+      sceneItemId,
+      sceneItemEnabled: enabled,
+    });
+
+    // Refresh item list
+    const items = await this.getSceneItemIndexList(sceneName);
+
+    // Get updated enabled state from refreshed list if available
+    const refreshedItem = items.find(item => item.sceneItemId === sceneItemId);
+    const finalEnabled = refreshedItem ? Boolean((refreshedItem as { enabled?: boolean }).enabled ?? enabled) : enabled;
+
+    return {
+      sceneName,
+      sceneItemId,
+      sourceName: matchingItem.sourceName || null,
+      enabled: finalEnabled,
+      items: items.map(item => ({
+        sceneItemId: item.sceneItemId,
+        sourceName: item.sourceName,
+        sceneItemIndex: item.sceneItemIndex,
+        enabled: (item as { enabled?: boolean }).enabled,
+      })),
+    };
+  }
+
+  async removeSceneItemForStudio(
+    config: AgentConfig,
+    payload: ObsRelaySceneItemRemovePayload,
+  ): Promise<ObsRelaySceneItemRemoveResult> {
+    await this.ensureConnected(config);
+
+    const sceneName = payload.sceneName.trim();
+    if (!sceneName.length) {
+      throw new Error("sceneName is required.");
+    }
+
+    const sceneItemId = payload.sceneItemId;
+    if (!Number.isInteger(sceneItemId) || sceneItemId <= 0) {
+      throw new Error("sceneItemId must be a positive integer.");
+    }
+
+    // Fetch scene items and find the target
+    const sceneItems = await this.listSceneItems(config, sceneName);
+    const matchingItem = sceneItems.find(item => item.sceneItemId === sceneItemId) ?? null;
+    if (!matchingItem) {
+      throw new Error(`Scene item ${sceneItemId} was not found in scene '${sceneName}'.`);
+    }
+
+    // Check sourceName mismatch if provided
+    if (payload.sourceName && payload.sourceName.trim().length > 0) {
+      const expected = payload.sourceName.trim().toLowerCase();
+      const actual = matchingItem.sourceName.trim().toLowerCase();
+      if (expected !== actual) {
+        this.log(
+          "warn",
+          `Scene item source mismatch for ${sceneName}#${sceneItemId}: expected '${payload.sourceName}', got '${matchingItem.sourceName}'. Removing anyway.`,
+        );
+      }
+    }
+
+    // Remove the scene item (removes from scene, not global input deletion)
+    await this.obs.call("RemoveSceneItem", {
+      sceneName,
+      sceneItemId,
+    });
+
+    // Refresh item list
+    const items = await this.getSceneItemIndexList(sceneName);
+
+    return {
+      sceneName,
+      sceneItemId,
+      sourceName: matchingItem.sourceName || null,
+      removed: true,
+      items: items.map(item => ({
+        sceneItemId: item.sceneItemId,
+        sourceName: item.sourceName,
+        sceneItemIndex: item.sceneItemIndex,
+        enabled: (item as { enabled?: boolean }).enabled,
+      })),
     };
   }
 
