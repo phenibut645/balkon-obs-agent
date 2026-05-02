@@ -46,7 +46,7 @@ export async function setSceneItemVisibilityForStudio(
 
   const items = await getSceneItemIndexList(context, sceneName);
   const refreshedItem = items.find(item => item.sceneItemId === sceneItemId);
-  const finalEnabled = refreshedItem ? Boolean((refreshedItem as { enabled?: boolean }).enabled ?? enabled) : enabled;
+  const finalEnabled = refreshedItem ? refreshedItem.enabled : enabled;
 
   return {
     sceneName,
@@ -57,7 +57,7 @@ export async function setSceneItemVisibilityForStudio(
       sceneItemId: item.sceneItemId,
       sourceName: item.sourceName,
       sceneItemIndex: item.sceneItemIndex,
-      enabled: (item as { enabled?: boolean }).enabled,
+      enabled: item.enabled,
     })),
   };
 }
@@ -113,7 +113,7 @@ export async function removeSceneItemForStudio(
       sceneItemId: item.sceneItemId,
       sourceName: item.sourceName,
       sceneItemIndex: item.sceneItemIndex,
-      enabled: (item as { enabled?: boolean }).enabled,
+      enabled: item.enabled,
     })),
   };
 }

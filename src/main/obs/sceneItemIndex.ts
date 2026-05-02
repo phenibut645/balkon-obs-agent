@@ -2,22 +2,31 @@ import { AgentConfig, ObsRelaySceneItemIndexSetPayload, ObsRelaySceneItemIndexSe
 import { ensureConnected, ObsConnectionContext } from "./connection.js";
 import { ObsSceneItemListResponse } from "./types.js";
 
+export type SceneItemIndexListEntry = {
+  sceneItemId: number;
+  sourceName: string;
+  sceneItemIndex: number;
+  enabled: boolean;
+};
+
 export async function getSceneItemIndexList(
   context: Pick<ObsConnectionContext, "obs">,
   sceneName: string,
-): Promise<Array<{ sceneItemId: number; sourceName: string; sceneItemIndex: number }>> {
+): Promise<SceneItemIndexListEntry[]> {
   const result = await context.obs.call("GetSceneItemList", { sceneName }) as ObsSceneItemListResponse;
   return (result.sceneItems ?? [])
     .map((item, index) => ({
       sceneItemId: Number(item.sceneItemId ?? NaN),
       sourceName: String(item.sourceName ?? "").trim(),
       sceneItemIndex: Number(item.sceneItemIndex ?? index),
+      enabled: Boolean(item.sceneItemEnabled),
     }))
     .filter(item => Number.isInteger(item.sceneItemId) && item.sceneItemId > 0 && item.sourceName.length > 0)
     .map(item => ({
       sceneItemId: item.sceneItemId,
       sourceName: item.sourceName,
       sceneItemIndex: Number.isInteger(item.sceneItemIndex) && item.sceneItemIndex >= 0 ? item.sceneItemIndex : 0,
+      enabled: item.enabled,
     }));
 }
 
