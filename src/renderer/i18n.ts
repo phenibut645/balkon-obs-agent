@@ -20,8 +20,11 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 
     // Tabs
     tab_main: "Main",
+    tab_capabilities: "Relay Methods",
     tab_settings: "Settings",
     tab_changelog: "Changelog",
+    capabilities_heading: "Relay Methods",
+    capabilities_description: "This agent build supports the following OBS relay commands.",
 
     // Main tab labels
     relay_url: "Relay URL",
@@ -89,8 +92,11 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 
     // Tabs
     tab_main: "Основное",
+    tab_capabilities: "Возможности",
     tab_settings: "Настройки",
     tab_changelog: "История",
+    capabilities_heading: "Возможности",
+    capabilities_description: "Этот агент поддерживает следующие команды OBS релея.",
 
     // Main tab labels
     relay_url: "URL релея",
@@ -158,8 +164,11 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 
     // Tabs
     tab_main: "Peamine",
+    tab_capabilities: "Võimekused",
     tab_settings: "Seadistused",
     tab_changelog: "Muudatused",
+    capabilities_heading: "Võimekused",
+    capabilities_description: "See agent toetab järgmisi OBS relee käske.",
 
     // Main tab labels
     relay_url: "Relei URL",

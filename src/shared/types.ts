@@ -98,7 +98,9 @@ export type ObsRelayCommandName =
   | "obs.scene.item.visibility.set"
   | "obs.scene.item.remove"
   | "obs.scene.source.text.create"
+  | "obs.scene.source.text.update"
   | "obs.scene.source.browser.create"
+  | "obs.scene.source.browser.update"
   | "obs.switchScene"
   | "obs.setSourceVisibility"
   | "obs.setTextInputText"
@@ -266,6 +268,21 @@ export interface ObsRelayTextSourceCreateResult {
   items: ObsRelaySceneItemIndexListItem[];
 }
 
+export interface ObsRelayTextSourceUpdatePayload {
+  sceneName: string;
+  sceneItemId: number;
+  sourceName?: string | null;
+  text: string;
+}
+
+export interface ObsRelayTextSourceUpdateResult {
+  sceneName: string;
+  sceneItemId: number;
+  sourceName: string;
+  inputKind: string | null;
+  text: string;
+}
+
 export interface ObsRelayBrowserSourceCreatePayload {
   sceneName: string;
   sourceName?: string | null;
@@ -289,6 +306,31 @@ export interface ObsRelayBrowserSourceCreateResult {
   height: number;
   transform: ObsRelaySceneItemTransform;
   items: ObsRelaySceneItemIndexListItem[];
+}
+
+export interface ObsRelayBrowserSourceUpdatePayload {
+  sceneName: string;
+  sceneItemId: number;
+  sourceName?: string | null;
+  url?: string;
+  width?: number;
+  height?: number;
+}
+
+export interface ObsRelayBrowserSourceUpdateResult {
+  sceneName: string;
+  sceneItemId: number;
+  sourceName: string;
+  inputKind: string | null;
+  url?: string;
+  width?: number;
+  height?: number;
+}
+
+export interface RelayCommandDescriptor {
+  command: ObsRelayCommandName | string;
+  category: string;
+  description: string;
 }
 
 export interface ObsRelaySceneItemVisibilitySetPayload {

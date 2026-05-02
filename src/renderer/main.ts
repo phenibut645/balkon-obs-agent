@@ -1,5 +1,6 @@
 import "./styles.css";
 import { AgentConfig, AgentSettings, AgentState, DEFAULT_CONFIG, DEFAULT_SETTINGS, LogEntry, UpdateState } from "../shared/types";
+import { SUPPORTED_RELAY_COMMANDS } from "../shared/relayCommands";
 import { CHANGELOG, ChangelogEntry } from "../shared/changelog";
 import { t, setLanguage } from "./i18n";
 
@@ -8,10 +9,12 @@ import { t, setLanguage } from "./i18n";
 // ============================================================================
 
 const tabMain = document.querySelector<HTMLButtonElement>("#tab-main");
+const tabCapabilities = document.querySelector<HTMLButtonElement>("#tab-capabilities");
 const tabSettings = document.querySelector<HTMLButtonElement>("#tab-settings");
 const tabChangelog = document.querySelector<HTMLButtonElement>("#tab-changelog");
 
 const panelMain = document.querySelector<HTMLElement>("#panel-main");
+const panelCapabilities = document.querySelector<HTMLElement>("#panel-capabilities");
 const panelSettings = document.querySelector<HTMLElement>("#panel-settings");
 const panelChangelog = document.querySelector<HTMLElement>("#panel-changelog");
 
@@ -34,6 +37,7 @@ const obsStatus = document.querySelector<HTMLElement>("#obs-status");
 const lastError = document.querySelector<HTMLElement>("#last-error");
 const clearLogButton = document.querySelector<HTMLButtonElement>("#clear-log-button");
 const logList = document.querySelector<HTMLOListElement>("#log-list");
+const capabilitiesList = document.querySelector<HTMLDivElement>("#capabilities-list");
 
 // ============================================================================
 // DOM Elements - Settings Tab
@@ -70,9 +74,11 @@ const changelogList = document.querySelector<HTMLElement>("#changelog-list");
 
 const requiredElements = [
   tabMain,
+  tabCapabilities,
   tabSettings,
   tabChangelog,
   panelMain,
+  panelCapabilities,
   panelSettings,
   panelChangelog,
   form,
@@ -90,6 +96,7 @@ const requiredElements = [
   lastError,
   clearLogButton,
   logList,
+  capabilitiesList,
   startWithWindowsCheck,
   startMinimizedCheck,
   autoConnectCheck,
@@ -118,20 +125,21 @@ const appVersion = document.querySelector<HTMLElement>("#app-version");
 // UI State
 // ============================================================================
 
-let currentTab: "main" | "settings" | "changelog" = "main";
+let currentTab: "main" | "capabilities" | "settings" | "changelog" = "main";
 let lastKnownState: AgentState | null = null;
 
 // ============================================================================
 // Tab Management
 // ============================================================================
 
-function switchTab(tab: "main" | "settings" | "changelog"): void {
+function switchTab(tab: "main" | "capabilities" | "settings" | "changelog"): void {
   if (currentTab === tab) return;
 
   const tabs = [
-    { tab: "main", button: tabMain!, panel: panelMain! },
-    { tab: "settings", button: tabSettings!, panel: panelSettings! },
-    { tab: "changelog", button: tabChangelog!, panel: panelChangelog! },
+    { tab: "main" as const, button: tabMain!, panel: panelMain! },
+    { tab: "capabilities" as const, button: tabCapabilities!, panel: panelCapabilities! },
+    { tab: "settings" as const, button: tabSettings!, panel: panelSettings! },
+    { tab: "changelog" as const, button: tabChangelog!, panel: panelChangelog! },
   ];
 
   for (const t of tabs) {
@@ -148,6 +156,7 @@ function switchTab(tab: "main" | "settings" | "changelog"): void {
 // ============================================================================
 
 tabMain!.addEventListener("click", () => switchTab("main"));
+tabCapabilities!.addEventListener("click", () => switchTab("capabilities"));
 tabSettings!.addEventListener("click", () => switchTab("settings"));
 tabChangelog!.addEventListener("click", () => switchTab("changelog"));
 
@@ -209,6 +218,8 @@ function updateTranslations(): void {
       el.textContent = t(key);
     }
   });
+
+  renderCapabilities();
 }
 
 function applyLanguage(lang: "en" | "ru" | "et"): void {
@@ -216,6 +227,57 @@ function applyLanguage(lang: "en" | "ru" | "et"): void {
   updateTranslations();
   // Re-render state so translated strings (e.g. error_none) are refreshed.
   if (lastKnownState) renderState(lastKnownState);
+}
+
+// ============================================================================
+// Capabilities Rendering
+// ============================================================================
+
+function renderCapabilities(): void {
+  if (!capabilitiesList) {
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+
+  const table = document.createElement("div");
+  table.className = "capabilities-table-body";
+
+  let currentCategory: string | null = null;
+  for (const entry of SUPPORTED_RELAY_COMMANDS) {
+    if (entry.category !== currentCategory) {
+      currentCategory = entry.category;
+      const headerRow = document.createElement("div");
+      headerRow.className = "capabilities-row capabilities-row-category";
+
+      const headerCell = document.createElement("div");
+      headerCell.className = "capabilities-cell capabilities-cell-category";
+      headerCell.textContent = currentCategory;
+      headerRow.appendChild(headerCell);
+
+      table.appendChild(headerRow);
+    }
+
+    const row = document.createElement("div");
+    row.className = "capabilities-row";
+
+    const commandCell = document.createElement("div");
+    commandCell.className = "capabilities-cell capabilities-cell-command";
+    commandCell.textContent = entry.command;
+
+    const descriptionCell = document.createElement("div");
+    descriptionCell.className = "capabilities-cell capabilities-cell-description";
+    descriptionCell.textContent = entry.description;
+
+    row.appendChild(commandCell);
+    row.appendChild(descriptionCell);
+    table.appendChild(row);
+  }
+
+  fragment.appendChild(table);
+
+  capabilitiesList.innerHTML = "";
+  capabilitiesList.appendChild(fragment);
 }
 
 // ============================================================================

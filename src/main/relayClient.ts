@@ -10,7 +10,9 @@ import {
   ObsRelaySceneItemVisibilitySetPayload,
   ObsRelaySceneItemRemovePayload,
   ObsRelayTextSourceCreatePayload,
+  ObsRelayTextSourceUpdatePayload,
   ObsRelayBrowserSourceCreatePayload,
+  ObsRelayBrowserSourceUpdatePayload,
   ObsRelayCommandMessage,
   ObsRelayCommandResultMessage,
   ObsRelayErrorMessage,
@@ -33,6 +35,83 @@ type LogListener = (entry: LogEntry) => void;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseTextSourceUpdatePayload(payload: Record<string, unknown> | undefined): ObsRelayTextSourceUpdatePayload {
+  const sceneName = getStringPayload(payload, "sceneName");
+  if (sceneName.length > 160) {
+    throw new Error("sceneName must be 160 characters or fewer.");
+  }
+
+  const sceneItemIdRaw = getNumberPayload(payload, "sceneItemId");
+  if (!Number.isInteger(sceneItemIdRaw) || sceneItemIdRaw <= 0) {
+    throw new Error("sceneItemId must be a positive integer.");
+  }
+
+  const text = getStringPayload(payload, "text");
+  if (text.length > 500) {
+    throw new Error("text must be 500 characters or fewer.");
+  }
+
+  const sourceName = getOptionalStringPayload(payload, "sourceName");
+  if (typeof sourceName === "string" && sourceName.length > 160) {
+    throw new Error("sourceName must be 160 characters or fewer.");
+  }
+
+  return {
+    sceneName,
+    sceneItemId: sceneItemIdRaw,
+    sourceName,
+    text,
+  };
+}
+
+function parseBrowserSourceUpdatePayload(payload: Record<string, unknown> | undefined): ObsRelayBrowserSourceUpdatePayload {
+  const sceneName = getStringPayload(payload, "sceneName");
+  if (sceneName.length > 160) {
+    throw new Error("sceneName must be 160 characters or fewer.");
+  }
+
+  const sceneItemIdRaw = getNumberPayload(payload, "sceneItemId");
+  if (!Number.isInteger(sceneItemIdRaw) || sceneItemIdRaw <= 0) {
+    throw new Error("sceneItemId must be a positive integer.");
+  }
+
+  const sourceName = getOptionalStringPayload(payload, "sourceName");
+  if (typeof sourceName === "string" && sourceName.length > 160) {
+    throw new Error("sourceName must be 160 characters or fewer.");
+  }
+
+  const rawUrl = getOptionalStringPayload(payload, "url");
+  let url: string | undefined;
+  if (typeof rawUrl === "string") {
+    if (rawUrl.length > 1000) {
+      throw new Error("url must be 1000 characters or fewer.");
+    }
+    if (!/^https?:\/\//i.test(rawUrl)) {
+      throw new Error("url must be a valid http:// or https:// URL.");
+    }
+    url = rawUrl;
+  }
+
+  const widthRaw = getOptionalNumberPayload(payload, "width");
+  const heightRaw = getOptionalNumberPayload(payload, "height");
+
+  const width = widthRaw === undefined ? undefined : clampNumber(Math.round(widthRaw), 64, 3840);
+  const height = heightRaw === undefined ? undefined : clampNumber(Math.round(heightRaw), 64, 2160);
+
+  if (url === undefined && width === undefined && height === undefined) {
+    throw new Error("At least one of url, width, or height must be provided.");
+  }
+
+  return {
+    sceneName,
+    sceneItemId: sceneItemIdRaw,
+    sourceName,
+    url,
+    width,
+    height,
+  };
 }
 
 function getStringPayload(payload: Record<string, unknown> | undefined, primary: string, fallback?: string, allowEmpty = false): string {
@@ -584,9 +663,17 @@ export class RelayClient {
         const payload = parseTextSourceCreatePayload(message.payload);
         return this.obsClient.createTextSourceForStudio(config, payload);
       }
+      case "obs.scene.source.text.update": {
+        const payload = parseTextSourceUpdatePayload(message.payload);
+        return this.obsClient.updateTextSourceForStudio(config, payload);
+      }
       case "obs.scene.source.browser.create": {
         const payload = parseBrowserSourceCreatePayload(message.payload);
         return this.obsClient.createBrowserSourceForStudio(config, payload);
+      }
+      case "obs.scene.source.browser.update": {
+        const payload = parseBrowserSourceUpdatePayload(message.payload);
+        return this.obsClient.updateBrowserSourceForStudio(config, payload);
       }
       case "obs.scene.item.visibility.set": {
         const payload = parseSceneItemVisibilitySetPayload(message.payload);

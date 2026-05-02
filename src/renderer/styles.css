@@ -397,6 +397,89 @@ button:active:not(:disabled) {
   word-break: break-word;
 }
 
+/* ============================================================================
+ * Capabilities Tab
+ * ============================================================================ */
+
+.capabilities-section {
+  background: #f7f9fa;
+  border: 1px solid #ccd2d8;
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.capabilities-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2933;
+}
+
+.capabilities-subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: #5a6672;
+}
+
+.capabilities-table {
+  border: 1px solid #d5dce0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.capabilities-table-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.capabilities-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr);
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e4e8ec;
+}
+
+.capabilities-row:last-child {
+  border-bottom: none;
+}
+
+.capabilities-row-category {
+  background: linear-gradient(90deg, rgba(40, 125, 92, 0.12), rgba(40, 125, 92, 0.05));
+  border-bottom: 1px solid rgba(40, 125, 92, 0.25);
+}
+
+.capabilities-cell {
+  font-size: 13px;
+  color: #1f2933;
+  align-self: center;
+}
+
+.capabilities-cell-category {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #1f4e36;
+  text-transform: uppercase;
+}
+
+.capabilities-cell-command {
+  font-family: "Courier New", monospace;
+  font-size: 12px;
+  color: #2c3e50;
+}
+
+.capabilities-cell-description {
+  font-size: 13px;
+  color: #3d4a57;
+  line-height: 1.5;
+}
+
 .log-entry.log-success span {
   color: #155724;
 }

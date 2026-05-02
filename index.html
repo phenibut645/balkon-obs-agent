@@ -33,6 +33,9 @@
         <button id="tab-main" class="tab-button active" role="tab" aria-selected="true" aria-controls="panel-main" data-tab="main">
           <span data-i18n="tab_main">Main</span>
         </button>
+        <button id="tab-capabilities" class="tab-button" role="tab" aria-selected="false" aria-controls="panel-capabilities" data-tab="capabilities">
+          <span data-i18n="tab_capabilities">Capabilities</span>
+        </button>
         <button id="tab-settings" class="tab-button" role="tab" aria-selected="false" aria-controls="panel-settings" data-tab="settings">
           <span data-i18n="tab_settings">Settings</span>
         </button>
@@ -93,6 +96,15 @@
             </div>
             <ol id="log-list" class="log-list"></ol>
           </section>
+        </section>
+
+        <!-- Capabilities Tab -->
+        <section id="panel-capabilities" class="tab-panel" role="tabpanel" aria-labelledby="tab-capabilities">
+          <div class="capabilities-section">
+            <h2 class="capabilities-title" data-i18n="capabilities_heading">Relay Methods</h2>
+            <p class="capabilities-subtitle" data-i18n="capabilities_description">This agent build supports the following OBS relay commands.</p>
+            <div id="capabilities-list" class="capabilities-table" role="table" aria-label="Relay command list"></div>
+          </div>
         </section>
 
         <!-- Settings Tab -->
