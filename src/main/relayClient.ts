@@ -9,6 +9,7 @@ import {
   ObsRelaySceneItemTransformSetPayload,
   ObsRelaySceneItemVisibilitySetPayload,
   ObsRelaySceneItemRemovePayload,
+  ObsRelaySourceSettingsGetPayload,
   ObsRelayTextSourceCreatePayload,
   ObsRelayTextSourceUpdatePayload,
   ObsRelayBrowserSourceCreatePayload,
@@ -369,6 +370,29 @@ function parseSceneItemRemovePayload(payload: Record<string, unknown> | undefine
   };
 }
 
+function parseSourceSettingsGetPayload(payload: Record<string, unknown> | undefined): ObsRelaySourceSettingsGetPayload {
+  const sceneName = getStringPayload(payload, "sceneName");
+  if (sceneName.length > 160) {
+    throw new Error("sceneName must be 160 characters or fewer.");
+  }
+
+  const sceneItemIdRaw = getNumberPayload(payload, "sceneItemId");
+  if (!Number.isInteger(sceneItemIdRaw) || sceneItemIdRaw <= 0) {
+    throw new Error("sceneItemId must be a positive integer.");
+  }
+
+  const sourceName = getOptionalStringPayload(payload, "sourceName");
+  if (typeof sourceName === "string" && sourceName.length > 160) {
+    throw new Error("sourceName must be 160 characters or fewer.");
+  }
+
+  return {
+    sceneName,
+    sceneItemId: sceneItemIdRaw,
+    sourceName,
+  };
+}
+
 export class RelayClient {
   private readonly obsClient: ObsClient;
   private socket: WebSocket | null = null;
@@ -682,6 +706,10 @@ export class RelayClient {
       case "obs.scene.item.remove": {
         const payload = parseSceneItemRemovePayload(message.payload);
         return this.obsClient.removeSceneItemForStudio(config, payload);
+      }
+      case "obs.scene.source.settings.get": {
+        const payload = parseSourceSettingsGetPayload(message.payload);
+        return this.obsClient.getSourceSettingsForStudio(config, payload);
       }
       case "obs.switchScene": {
         const sceneName = getStringPayload(message.payload, "sceneName");

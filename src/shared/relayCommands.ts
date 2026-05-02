@@ -47,6 +47,11 @@ export const SUPPORTED_RELAY_COMMANDS: RelayCommandDescriptor[] = [
     description: "Removes a scene item from the scene without deleting the underlying source.",
   },
   {
+    command: "obs.scene.source.settings.get",
+    category: "Source Inspection",
+    description: "Reads editable source settings for text or browser sources to prefill the Streamer Studio inspector.",
+  },
+  {
     command: "obs.scene.source.text.create",
     category: "Source Creation",
     description: "Creates a new text source in a scene and returns the created scene item details.",

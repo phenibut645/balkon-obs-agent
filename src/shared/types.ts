@@ -97,6 +97,7 @@ export type ObsRelayCommandName =
   | "obs.scene.item.index.set"
   | "obs.scene.item.visibility.set"
   | "obs.scene.item.remove"
+  | "obs.scene.source.settings.get"
   | "obs.scene.source.text.create"
   | "obs.scene.source.text.update"
   | "obs.scene.source.browser.create"
@@ -370,6 +371,25 @@ export interface ObsRelaySceneItemRemoveResult {
     sceneItemIndex: number;
     enabled?: boolean;
   }>;
+}
+
+export interface ObsRelaySourceSettingsGetPayload {
+  sceneName: string;
+  sceneItemId: number;
+  sourceName?: string | null;
+}
+
+export interface ObsRelaySourceSettingsGetResult {
+  sceneName: string;
+  sceneItemId: number;
+  sourceName: string;
+  inputKind: string | null;
+  settings: {
+    text?: string;
+    url?: string;
+    width?: number;
+    height?: number;
+  };
 }
 
 export type ObsMediaAction =
