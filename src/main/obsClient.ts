@@ -797,7 +797,7 @@ export class ObsClient {
       this.log("warn", `GetInputSettings failed for browser source '${sourceName}': ${this.formatError(error)}`);
     }
 
-    const nextSettings: Record<string, unknown> = {};
+    const nextSettings: Record<string, string | number> = {};
     if (normalizedUrl !== undefined) {
       nextSettings.url = normalizedUrl;
     }
